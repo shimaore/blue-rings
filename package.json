@@ -1,0 +1,26 @@
+{
+  "name": "blue-rings",
+  "version": "1.0.0",
+  "description": "Blue Rings: distributed counters --------------------------------",
+  "main": "index.js",
+  "dependencies": {
+    "axon": "^2.0.3",
+    "immutable": "^4.0.0-rc.9"
+  },
+  "devDependencies": {
+    "coffeescript": "^2.3.1"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/shimaore/blue-rings.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://gitlab.com/shimaore/blue-rings/issues"
+  },
+  "homepage": "https://gitlab.com/shimaore/blue-rings#README"
+}

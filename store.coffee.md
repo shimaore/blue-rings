@@ -1,96 +1,97 @@
     Immutable = require 'immutable'
-    HASH_NAME = 'sha256'
 
 BlueRing is a store for (opaque) tickets.
 
-However each ticket must be mapped to a unique, stable representation (strictly speaking the tickets must be sort()able and acceptable as input for a hash function; really only strings satisfy both conditions).
+Tickets (as transmitted in the protocol) are expected to be `string`.
 
-Moreover, there could be ambiguities as to how AMP parses ticket contents, especially if values are expected to be exact.
-
-Therefor, tickets (as transmitted in the protocol) are expected to be `string`.
-
-    hash_set = (tickets) ->
-      hash = tickets
-        .toList()
-        .sort()
-        .reduce (acc,val) -> acc.update val
-        , crypto.createHash HASH_NAME
-      hash.digest 'latin1'
+    TICKETS = 'tickets'
+    EXPIRE  = 'expire'
+    VALUE   = 'value'
 
     class BlueRing
-      constructor: ->
-        @store = Immutable.Map()
+      constructor: (@compute_value,@initial) ->
+        @store = new Map()
 
 Public operations
 
       add_counter: (name,expire) ->
-        @add_local_tickets name, expire, null
+        @add_local_tickets name, expire, Immutable.Set()
 
-      add_ticket: (name,ticket) ->
-        @add_local_tickets name, null, [ticket]
+      add_ticket: (name,ticket,expire) ->
+        @add_local_tickets name, expire, Immutable.Set [ticket]
 
-      accumulate: (name,cb,initial) ->
-        counter = @get_local_counter name
-        counter?.get('tickets').reduce cb, initial
+      get_expire: (name) ->
+        @store.get(name)?.get EXPIRE
+
+      get_value: (name) ->
+        @store.get(name)?.get VALUE
+
+      get_tickets: (name) ->
+        @store.get(name)?.get TICKETS
 
 Private operations
 
       get_local_counter: (name) ->
-        store = @store
-        return unless store.has name
-        expire = store.getIn [name,'expire'], 0
-        return unless expire > Date.now()
-        return store.get name
+        expire = @get_expire() ? 0
+        if expire > Date.now()
+          @store.get name
+        else
+          @store.delete name
+          null
 
 Tool
 
-      add_local_tickets: (name,expire,tickets) ->
-
-        these_tickets = Immutable.Set tickets
+      add_local_tickets: (name,expire,these_tickets) ->
 
 FIXME These are updated from within `update`, making the function impure.
 
         forwarded_tickets = Immutable.Set()
-        hash = null
 
-        @store = @store.update name, ( local = Immutable.Map() ) ->
-          old_tickets = local.get 'tickets', Immutable.Set()
-          new_tickets = old_tickets.union these_tickets
-          forwarded_tickets = new_tickets.substract old_tickets
-          local = local.set 'tickets', new_tickets
+        local = @store.get(name) ? Immutable.Map()
 
-          local = local.set 'expire', expire if expire?
+        old_tickets = local.get TICKETS, Immutable.Set()
+        new_tickets = old_tickets.union these_tickets
+        local = local.set TICKETS, new_tickets
 
-          return local if local.has('hash') and new_tickets.equals old_tickets
+        forwarded_tickets = new_tickets.subtract old_tickets
 
-          hash = hash_set new_tickets
-          local.set 'hash', hash
+        if expire? and ((not local.has EXPIRE) or (expire > local.get EXPIRE))
+          local = local.set EXPIRE, expire
 
-        {tickets: forwarded_tickets, hash}
+Optimization: avoid re-computing the value if it hasn't changed.
+
+        unless local.has(VALUE) and new_tickets.equals old_tickets
+          value = @compute_value new_tickets
+          local = local.set VALUE, value
+
+        @store.set name, local
+        [forwarded_tickets,local]
 
 Message handlers
 
-      on_request_tickets: (name) ->
-        local = @get_local_counter name
-        return unless local?
-        expire = local.get 'expire'
-        hash = local.get 'hash'
-        tickets = local.get 'tickets'
-        {name, expire, hash, tickets: tickets.toJS()}
+      on_new_tickets: (name,expire,expected_value,tickets,socket) ->
+        received_tickets = Immutable.Set tickets
+        [tickets,local] = @add_local_tickets name, expire, received_tickets
+        expire = local.get EXPIRE
+        value = local.get VALUE
 
-      on_new_tickets: (name,expire,hash,tickets,socket) ->
-        local = @get_local_counter name
-        return if hash is local?.get 'hash'
+If the values do not match (some neighbor(s) is visibly missing some of our tickets),
+we send a new message (marked as originating from ourselves) containing all of our tickets.
 
-        {tickets,hash} = @add_local_tickets name, expire, tickets
+        if not expected_value is value
+          tickets = local.get TICKETS
+          {name,expire,value,tickets,source:true}
 
-        {name, expire, hash, tickets}
+If the values match, we simply forward on behalf of the original sender.
+
+        else
+          {name,expire,value,tickets,source:false}
 
       enumerate_local_counters: (cb) ->
         @store.forEach (local,name) ->
-          expire = local.get 'expire'
-          hash = local.get 'hash'
-          tickets = local.get 'tickets'
-          cb {name,expire,hash,tickets:tickets.toJS()}
+          expire = local.get EXPIRE
+          value = local.get VALUE
+          tickets = local.get TICKETS
+          cb {name,expire,value,tickets}
 
     module.exports = BlueRing

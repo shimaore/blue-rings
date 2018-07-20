@@ -1,5 +1,5 @@
     DEFAULT_PORT = 4000
-    PING_INTERVAL = 500
+    PING_INTERVAL = 150
     PING_PACKET = ''
 
 From a protocol perspective, this should use SCTP as the underlying protocol.
@@ -13,17 +13,33 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
     BlueRing = require './store'
 
     class BlueRingAxon extends BlueRing
-      constructor: (options) ->
-        super()
+      constructor: (compute_value,options) ->
+        super compute_value
+        {@host} = options
         @pub = Axon.socket 'pub'
         @subs = {}
 
-        ping = => @send PING_PACKET
+        ping = =>
+          @send PING_PACKET
 
         @pub.bind options.pub ? DEFAULT_PORT
         @timer = setInterval ping, PING_INTERVAL
 
         options.subscribe_to?.forEach (o) => @subscribe_to o
+
+Public operations
+
+      add_counter: (name,expire) ->
+        [tickets] = super name, expire
+        expire = @get_expire name
+        value = @get_value name
+        @send_tickets {name,expire,value,tickets}, @pub
+
+      add_ticket: (name,ticket,expire) ->
+        [tickets] = super name, ticket, expire
+        expire = @get_expire name
+        value = @get_value name
+        @send_tickets {name,expire,value,tickets}, @pub
 
       subscribe_to: (o) ->
         sub = Axon.socket 'sub'
@@ -35,25 +51,36 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
 Message encoding:
 - `ping()` is encoded as `true`
 - `request-tickets(name)` is encoded as `"#{name}"`
-- `new-tickets(name,hash,array-of-tickets)` is encoded as :1
+- `new-tickets(name,value,array-of-tickets)` is encoded as :1
 
         receive = (msg) =>
           switch
             when msg is PING_PACKET
               ping_received++
-            when typeof msg is 'string'
-              res = @on_request_tickets msg, sub
-              @send_tickets res, socket if res?
+
             when typeof msg is 'object'
-              res = @on_new_tickets msg.n, msg.e, msg.h, msg.t, sub
-              @send_tickets res, null if res? # all but socket
+
+Avoid processing messages we sent
+
+              return if msg.h is @host
+              return if msg.s is @host
+
+              res = @on_new_tickets msg.n, msg.e, msg.v, msg.t, sub
+              res.source = msg.s # if res.source then @host else msg.s
+
+              return if res.tickets.size is 0
+
+              # console.log 'sending', @host, res.host, res.tickets.size, res.value, msg.v
+              @send_tickets res, null # all but socket
+
           return
 
-        monitor = ->
+        monitor = =>
           if ping_received > 0
             ping_received = 0 # Reset counter
             return if connected
             # Transition from not-connected to connected
+            # console.log 'connected'
             connected = true
             @enumerate_local_counters (res) => @send_tickets res, sub
           else
@@ -71,22 +98,26 @@ Message encoding:
       coherent: ->
         Object.values(@subs).every (x) -> x.connected
 
-      disconnect: ->
+      close: ->
         clearInterval @timer
         @pub.close()
-        @subs.forEach ({sock,timer}) ->
+        @pub.server.unref() # hack, why is this require?
+        Object.values(@subs).forEach ({sock,timer}) ->
           sock.close()
           clearInterval timer
+        return
 
       send: (msg,socket) ->
         @pub.send msg
 
-      send_tickets: ({name,expire,hash,tickets},socket) ->
+      send_tickets: ({name,expire,value,tickets,source},socket) ->
         msg =
           n: name
           e: expire
-          h: hash
+          v: value
           t: tickets
+          s: source
+          h: @host
         @send msg, socket
 
     module.exports = BlueRingAxon

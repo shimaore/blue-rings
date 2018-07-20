@@ -8,9 +8,14 @@
     "immutable": "^4.0.0-rc.9"
   },
   "devDependencies": {
-    "coffeescript": "^2.3.1"
+    "chai": "^4.1.2",
+    "coffeescript": "^2.3.1",
+    "mocha": "^5.2.0"
   },
   "scripts": {
+    "build": "coffee -c *.coffee.md",
+    "prepublishOnly": "npm install --only=dev && npm run build",
+    "pretest": "npm install --only=dev && npm run build && coffee -c test/*.coffee.md",
     "test": "mocha"
   },
   "repository": {
@@ -21,6 +26,9 @@
   "license": "ISC",
   "bugs": {
     "url": "https://gitlab.com/shimaore/blue-rings/issues"
+  },
+  "engines": {
+    "node": ">= 10.7.0"
   },
   "homepage": "https://gitlab.com/shimaore/blue-rings#README"
 }

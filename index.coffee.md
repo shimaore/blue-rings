@@ -1,32 +1,15 @@
     BlueRingAxon = require './protocol'
-    Immutable = require 'immutable'
     assert = require 'assert'
 
 Public API for a service storing EcmaScript numbers (transmitted as base-36 strings).
 
     run = (options) ->
 
-      {values} = options
+      {Value} = options
 
-Internally a ticket is an Immutable.List
+      {add} = Value
 
-      Ticket =
-        serialize: (t) ->
-          [
-            values.toString t.get 0
-            t.get 1
-          ]
-        deserialize: (t) ->
-          t[0] = values.parse t[0]
-          Immutable.List t
-        accumulate: (acc,ticket) ->
-          amount = ticket.get 0
-          add acc, amount
-
-      {add} = values
-
-
-      service = new BlueRingAxon Ticket, values, options
+      service = new BlueRingAxon Value, options
       once = (e) -> new Promise (resolve) -> service.ev.once e, resolve
       bound = once 'bind'
       connected = once 'connected'
@@ -51,9 +34,11 @@ Note how we also use BigInt for hrtime.
 
         timestamp = process.hrtime.bigint()
 
-        ticket = Immutable.List [
-          amount
+Tickets are [key,value] pairs.
+
+        ticket = [
           [timestamp.toString(36),options.host].join ' '
+          amount
         ]
 
         service.add_ticket name, ticket, expire

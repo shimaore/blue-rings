@@ -26,8 +26,8 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
           console.error error
 
     class BlueRingAxon extends BlueRing
-      constructor: (Ticket,Value,options) ->
-        super Ticket, Value
+      constructor: (Value,options) ->
+        super Value
 
         @recv = BigInt 0
         @sent = BigInt 0
@@ -40,10 +40,10 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
         {@host} = options
         @pub = Axon.socket 'pub'
         @pub.once 'bind', =>
-          console.log 'bind', @host
+          # console.log 'bind', @host
           @ev.emit 'bind'
         @pub.on 'connect', =>
-          console.log 'pub: connect', @host
+          # console.log 'pub: connect', @host
           @on_connect()
 
         @sendall = new Map()
@@ -118,7 +118,7 @@ Avoid processing messages we sent
                 hash = local.get HASH
                 return if expire is msg.e and hash.equals remote_hash
 
-              tickets = msg.t.map @Ticket.deserialize
+              tickets = new Map msg.t
 
               res = @on_new_tickets name, msg.e, remote_hash, tickets, sub
 
@@ -149,8 +149,8 @@ Broadcast all of our tickets
             # Transition from not-connected to connected
             connected = true
             @connected++
-            console.log 'connected', @host, o
-            console.log 'all-connected', @host if @coherent()
+            # console.log 'connected', @host, o
+            # console.log 'all-connected', @host if @coherent()
             @ev.emit 'connected' if @coherent()
 
             @on_connect sub
@@ -160,7 +160,7 @@ Broadcast all of our tickets
             # Transition from connected to not-connected
             connected = false
             @connected--
-            console.log 'disconnected', @host
+            # console.log 'disconnected', @host
             @ev.emit 'disconnected'
           return
 
@@ -208,7 +208,7 @@ Broadcast all of our tickets
           n: name
           e: expire
           H: hash
-          t: tickets.map @Ticket.serialize
+          t: Array.from tickets.entries()
           s: source
           h: @host
         @send msg, socket

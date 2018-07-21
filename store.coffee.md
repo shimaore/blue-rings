@@ -1,4 +1,5 @@
     Immutable = require 'immutable'
+    crypto = require 'crypto'
 
 BlueRing is a store for (opaque) tickets.
 
@@ -6,7 +7,21 @@ Tickets (as transmitted in the protocol) are expected to be `string`.
 
     TICKETS = 'tickets'
     EXPIRE  = 'expire'
+    HASH    = 'hash'
     VALUE   = 'value'
+
+    ALGO = 'sha1'
+
+    hash_set = (name,tickets) ->
+      return Buffer.from tickets.hashCode().toString 36
+      ###
+      return Buffer.from name + tickets.toArray().sort().join ' '
+
+      h = crypto.createHash(ALGO).update name
+      # tickets.toArray().sort().forEach (t) -> h.update t
+      h.update tickets.toArray().sort().join ' '
+      h.digest()
+      ###
 
     class BlueRing
       constructor: (@compute_value,@initial) ->
@@ -23,16 +38,16 @@ Public operations
       get_expire: (name) ->
         @store.get(name)?.get EXPIRE
 
-      get_value: (name) ->
-        @store.get(name)?.get VALUE
+      get_hash: (name) ->
+        @get_local_counter(name)?.get HASH
 
-      get_tickets: (name) ->
-        @store.get(name)?.get TICKETS
+      get_value: (name) ->
+        @get_local_counter(name)?.get VALUE
 
 Private operations
 
       get_local_counter: (name) ->
-        expire = @get_expire() ? 0
+        expire = @get_expire(name) ? 0
         if expire > Date.now()
           @store.get name
         else
@@ -47,51 +62,58 @@ FIXME These are updated from within `update`, making the function impure.
 
         forwarded_tickets = Immutable.Set()
 
-        local = @store.get(name) ? Immutable.Map()
+        LL = (@store.get(name) ? Immutable.Map()).withMutations (L) =>
 
-        old_tickets = local.get TICKETS, Immutable.Set()
-        new_tickets = old_tickets.union these_tickets
-        local = local.set TICKETS, new_tickets
+          old_tickets = L.get TICKETS, Immutable.Set()
+          new_tickets = old_tickets.union these_tickets
 
-        forwarded_tickets = new_tickets.subtract old_tickets
+No changes, make sure we're consitent.
 
-        if expire? and ((not local.has EXPIRE) or (expire > local.get EXPIRE))
-          local = local.set EXPIRE, expire
+          if new_tickets.equals old_tickets
+            L = L.set HASH,  hash_set name, new_tickets unless L.has HASH
+            L = L.set VALUE, @compute_value new_tickets unless L.has VALUE
 
-Optimization: avoid re-computing the value if it hasn't changed.
+Changes occurred, update!
 
-        unless local.has(VALUE) and new_tickets.equals old_tickets
-          value = @compute_value new_tickets
-          local = local.set VALUE, value
+          else
+            L = L
+              .set TICKETS, new_tickets
+              .set HASH,  hash_set name, new_tickets
+              .set VALUE, @compute_value new_tickets
 
-        @store.set name, local
-        [forwarded_tickets,local]
+          forwarded_tickets = new_tickets.subtract old_tickets
+
+          if expire? and ((not L.has EXPIRE) or (expire > L.get EXPIRE))
+            L.set EXPIRE, expire
+
+        @store.set name, LL
+        [forwarded_tickets,LL]
 
 Message handlers
 
-      on_new_tickets: (name,expire,expected_value,tickets,socket) ->
+      on_new_tickets: (name,expire,expected_hash,tickets,socket) ->
         received_tickets = Immutable.Set tickets
         [tickets,local] = @add_local_tickets name, expire, received_tickets
         expire = local.get EXPIRE
-        value = local.get VALUE
+        hash = local.get HASH
 
-If the values do not match (some neighbor(s) is visibly missing some of our tickets),
+If the hashes do not match after the update (some neighbor(s) is missing some of our tickets),
 we send a new message (marked as originating from ourselves) containing all of our tickets.
 
-        if not expected_value is value
-          tickets = local.get TICKETS
-          {name,expire,value,tickets,source:true}
+        if not expected_hash.equals hash
+          tickets = local.get(TICKETS).subtract tickets
+          {name,expire,hash,tickets,source:true}
 
-If the values match, we simply forward on behalf of the original sender.
+If the hashes match, we simply forward on behalf of the original sender.
 
         else
-          {name,expire,value,tickets,source:false}
+          {name,expire,hash,tickets,source:false}
 
       enumerate_local_counters: (cb) ->
         @store.forEach (local,name) ->
           expire = local.get EXPIRE
-          value = local.get VALUE
+          hash = local.get HASH
           tickets = local.get TICKETS
-          cb {name,expire,value,tickets}
+          cb {name,expire,hash,tickets}
 
     module.exports = BlueRing

@@ -24,7 +24,7 @@ Tickets (as transmitted in the protocol) are expected to be `string`.
       ###
 
     class BlueRing
-      constructor: (@compute_value,@initial) ->
+      constructor: (@Ticket,@Value,@initial) ->
         @store = new Map()
 
 Public operations
@@ -33,7 +33,7 @@ Public operations
         @add_local_tickets name, expire, Immutable.Set()
 
       add_ticket: (name,ticket,expire) ->
-        @add_local_tickets name, expire, Immutable.Set [ticket]
+        @add_local_tickets name, expire, Immutable.Set [Immutable.List ticket]
 
       get_expire: (name) ->
         @store.get(name)?.get EXPIRE
@@ -58,36 +58,30 @@ Tool
 
       add_local_tickets: (name,expire,these_tickets) ->
 
-FIXME These are updated from within `update`, making the function impure.
+        L = @store.get(name) ? new Map()
 
-        forwarded_tickets = Immutable.Set()
+        old_tickets = L.get(TICKETS) ? Immutable.Set()
+        new_tickets = old_tickets.union these_tickets
+        forwarded_tickets = new_tickets.subtract old_tickets
 
-        LL = (@store.get(name) ? Immutable.Map()).withMutations (L) =>
+No changes, make sure we're consistent.
 
-          old_tickets = L.get TICKETS, Immutable.Set()
-          new_tickets = old_tickets.union these_tickets
-
-No changes, make sure we're consitent.
-
-          if new_tickets.equals old_tickets
-            L = L.set HASH,  hash_set name, new_tickets unless L.has HASH
-            L = L.set VALUE, @compute_value new_tickets unless L.has VALUE
+        if new_tickets.equals old_tickets
+          L.set HASH,  hash_set name, new_tickets unless L.has HASH
+          L.set VALUE, new_tickets.reduce @Ticket.accumulate, @Value.zero unless L.has VALUE
 
 Changes occurred, update!
 
-          else
-            L = L
-              .set TICKETS, new_tickets
-              .set HASH,  hash_set name, new_tickets
-              .set VALUE, @compute_value new_tickets
+        else
+          L.set TICKETS, new_tickets
+          L.set HASH,  hash_set name, new_tickets
+          L.set VALUE, forwarded_tickets.reduce @Ticket.accumulate, (L.get VALUE) ? @Value.zero
 
-          forwarded_tickets = new_tickets.subtract old_tickets
+        if expire? and ((not L.has EXPIRE) or (expire > L.get EXPIRE))
+          L.set EXPIRE, expire
 
-          if expire? and ((not L.has EXPIRE) or (expire > L.get EXPIRE))
-            L.set EXPIRE, expire
-
-        @store.set name, LL
-        [forwarded_tickets,LL]
+        @store.set name, L
+        [forwarded_tickets,L]
 
 Message handlers
 

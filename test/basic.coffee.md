@@ -8,7 +8,7 @@ Chai uses JSON.stringify to display content
     describe 'The package', ->
       blue_rings = require '..'
       M = blue_rings.run
-      values = blue_rings.integer # or M.bigint
+      values = blue_rings.integer
       # values = blue_rings.bigint
       # values.accept::toJSON = -> @toString 10
 

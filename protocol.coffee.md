@@ -26,8 +26,8 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
           console.error error
 
     class BlueRingAxon extends BlueRing
-      constructor: (compute_value,options) ->
-        super compute_value
+      constructor: (Ticket,Value,options) ->
+        super Ticket, Value
 
         @recv = BigInt 0
         @sent = BigInt 0
@@ -111,13 +111,16 @@ Avoid processing messages we sent
               return if msg.s is @host
 
               local = @get_local_counter name
+              # assert msg.H?.type is 'Buffer'
               remote_hash = Buffer.from msg.H.data
               if local?
                 expire = local.get EXPIRE
                 hash = local.get HASH
                 return if expire is msg.e and hash.equals remote_hash
 
-              res = @on_new_tickets name, msg.e, remote_hash, msg.t, sub
+              tickets = msg.t.map @Ticket.deserialize
+
+              res = @on_new_tickets name, msg.e, remote_hash, tickets, sub
 
               sendall = =>
                 @send_tickets res, null
@@ -205,7 +208,7 @@ Broadcast all of our tickets
           n: name
           e: expire
           H: hash
-          t: tickets
+          t: tickets.map @Ticket.serialize
           s: source
           h: @host
         @send msg, socket

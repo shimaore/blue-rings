@@ -1,28 +1,39 @@
     BlueRingAxon = require './protocol'
+    Immutable = require 'immutable'
     assert = require 'assert'
 
 Public API for a service storing EcmaScript numbers (transmitted as base-36 strings).
 
-    SEPARATOR = ' '
     run = (options) ->
 
       {values} = options
 
-      accumulate = (acc,ticket) ->
-        amount = values.parse ticket.split(SEPARATOR)[0]
-        values.add acc, amount
+Internally a ticket is an Immutable.List
 
-      compute_value = (tickets) ->
-        values.toString tickets.reduce(accumulate, values.zero)
+      Ticket =
+        serialize: (t) ->
+          [
+            values.toString t.get 0
+            t.get 1
+          ]
+        deserialize: (t) ->
+          t[0] = values.parse t[0]
+          Immutable.List t
+        accumulate: (acc,ticket) ->
+          amount = ticket.get 0
+          add acc, amount
 
-      service = new BlueRingAxon compute_value, options
+      {add} = values
+
+
+      service = new BlueRingAxon Ticket, values, options
       once = (e) -> new Promise (resolve) -> service.ev.once e, resolve
       bound = once 'bind'
       connected = once 'connected'
 
       get_counter = (name) ->
         assert 'string' is typeof name, 'get_counter: name is required'
-        value = values.parse service.get_value name
+        value = service.get_value name
         coherent = service.coherent()
         [coherent,value]
 
@@ -40,11 +51,10 @@ Note how we also use BigInt for hrtime.
 
         timestamp = process.hrtime.bigint()
 
-        ticket = [
-          values.toString amount
-          timestamp.toString 36
-          options.host
-        ].join SEPARATOR
+        ticket = Immutable.List [
+          amount
+          [timestamp.toString(36),options.host].join ' '
+        ]
 
         service.add_ticket name, ticket, expire
 
@@ -52,11 +62,7 @@ Note how we also use BigInt for hrtime.
 
       statistics = ->
         recv: service.recv
-        recv_ping: service.recv_ping
-        recv_updt: service.recv_updt
         sent: service.sent
-        sent_ping: service.sent_ping
-        sent_updt: service.sent_updt
 
       end = ->
         service.close()

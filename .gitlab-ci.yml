@@ -1,0 +1,6 @@
+image: node:alpine
+
+build:
+  script:
+  - npm install
+  - npm test

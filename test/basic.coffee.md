@@ -1,8 +1,6 @@
     {expect} = chai = require 'chai'
     chai.should()
 
-Chai uses JSON.stringify to display content
-
     sleep = (timeout) -> new Promise (resolve) -> setTimeout resolve, timeout
 
     describe 'The package', ->
@@ -49,6 +47,7 @@ Chai uses JSON.stringify to display content
                 tcp port2
               ]
               Value: Value
+              connect_delay: 0
             after -> m1.end()
 
             m2 = M
@@ -58,6 +57,7 @@ Chai uses JSON.stringify to display content
                 tcp port1
               ]
               Value: Value
+              connect_delay: 0
             after -> m2.end()
 
             await Promise.all [m1.bound,m2.bound,m1.connected,m2.connected]
@@ -103,6 +103,7 @@ Chai uses JSON.stringify to display content
                 tcp port2
               ]
               Value: Value
+              connect_delay: 0
             after -> m1.end()
 
             NAME = 'dog'
@@ -125,6 +126,7 @@ Chai uses JSON.stringify to display content
                 tcp port1
               ]
               Value: Value
+              connect_delay: 0
             after -> m2.end()
 
             m2.setup_counter NAME, Date.now()+8000
@@ -154,6 +156,8 @@ Chai uses JSON.stringify to display content
             v.should.have.property 1, Value.accept 94
 
           it 'should accumulate values across three servers (ring)', ->
+            @timeout 3000
+
             port1 = port++
             port2 = port++
             port3 = port++
@@ -164,6 +168,8 @@ Chai uses JSON.stringify to display content
                 tcp port3
               ]
               Value: Value
+              connect_delay: 1
+              forward_delay: 2
             after -> m1.end()
 
             m2 = M
@@ -173,6 +179,8 @@ Chai uses JSON.stringify to display content
                 tcp port1
               ]
               Value: Value
+              connect_delay: 1
+              forward_delay: 2
             after -> m2.end()
 
             m3 = M
@@ -182,6 +190,8 @@ Chai uses JSON.stringify to display content
                 tcp port2
               ]
               Value: Value
+              connect_delay: 1
+              forward_delay: 2
             after -> m3.end()
 
             NAME = 'ant'
@@ -238,6 +248,7 @@ Chai uses JSON.stringify to display content
 
 
           it 'should accumulate values across three disconnected servers (full-mesh)', ->
+            @timeout 3000
             port1 = port++
             port2 = port++
             port3 = port++
@@ -250,6 +261,7 @@ Chai uses JSON.stringify to display content
                 tcp port3
               ]
               Value: Value
+              connect_delay: 1
             after -> m1.end()
 
             NAME = 'dog'
@@ -274,6 +286,7 @@ Chai uses JSON.stringify to display content
                 tcp port3
               ]
               Value: Value
+              connect_delay: 1
             after -> m2.end()
 
             m2.setup_counter NAME, Date.now()+8000
@@ -322,6 +335,7 @@ Chai uses JSON.stringify to display content
                 tcp port2
               ]
               Value: Value
+              connect_delay: 1
             after -> m3.end()
 
             m3.setup_counter NAME, Date.now()+8000
@@ -387,10 +401,10 @@ Chai uses JSON.stringify to display content
             @timeout 3000
             load (l,i1,i2,p1,p2) -> p1 < p2
 
-          it.skip 'should accumulate a whole bunch of values across a whole bunch of servers (ring)', ->
+          it 'should accumulate a whole bunch of values across a whole bunch of servers (ring)', ->
             @timeout 40000
-            load ((l,i1,i2) -> i2 is (i1+1)%l),
-              forward_delay: 0, flood_delay: 2000, connect_delay: 1500
+            load 30000, ((l,i1,i2) -> i2 is (i1+1)%l),
+              forward_delay: 0, flood_delay: 200, connect_delay: 1500
 
           it.skip 'should accumulate a whole bunch of values across a whole bunch of servers (counter-rotating rings)', ->
             @timeout 40000
@@ -431,6 +445,9 @@ Chai uses JSON.stringify to display content
 
 
       run_with 'native integers', blue_rings.integer
+
+Chai uses JSON.stringify to display content on errors.
+
       Value = blue_rings.bigint
       Value.accept::toJSON = -> @toString 10
       run_with 'native BigInt', Value

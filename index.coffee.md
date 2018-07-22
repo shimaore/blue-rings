@@ -49,7 +49,9 @@ Tickets are [key,value] pairs.
 
       statistics = ->
         recv: service.recv
+        recv_tickets: service.recv_tickets
         sent: service.sent
+        sent_tickets: service.sent_tickets
 
       end = ->
         service.close()

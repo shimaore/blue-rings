@@ -31,16 +31,18 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
 Statistics
 
         @recv = BigInt 0
+        @recv_tickets = BigInt 0
         @sent = BigInt 0
+        @sent_tickets = BigInt 0
 
 Options
 
         {
           @host
           subscribe_to
-          @forward_delay = 3
-          @flood_delay = 500
-          @connect_delay = 1
+          @forward_delay = 1000
+          @flood_delay   = 1200
+          @connect_delay = 1500
         } = options
 
 Map of name-to-timer to throttle sending messages out (used to implement the delays)
@@ -121,6 +123,7 @@ Message encoding:
             when typeof msg is 'object'
               # console.log 'receive', @host, msg
               @recv++
+              @recv_tickets += BigInt msg.t.length
 
               name = msg.n
 
@@ -240,6 +243,7 @@ Private
         @send msg, socket
 
         @sent++
+        @sent_tickets += BigInt tickets.size
         return
 
     module.exports = BlueRingAxon

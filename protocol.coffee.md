@@ -14,7 +14,7 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
 
     Axon = require 'axon'
     BlueRing = require './store'
-    {EventEmitter2} = require 'eventemitter2'
+    {EventEmitter} = require 'events'
 
     wrap = (f) ->
       self = this
@@ -49,7 +49,7 @@ Map of name-to-timer to throttle sending messages out (used to implement the del
 
         @__sendall = new Map()
 
-        @ev = new EventEmitter2
+        @ev = new EventEmitter
 
 Publisher (sends data out)
 

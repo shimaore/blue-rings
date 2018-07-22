@@ -6,6 +6,8 @@ The goal is to provide distributed counters usable for billing, with:
 - "light" real-time updates
 - able to detect and handle network splits
 
+The underlying protocol is currently Axon, a lightweight, native alternative to ZeroMQ on Node.js.
+
 API
 ---
 
@@ -15,24 +17,25 @@ const ring = BlueRings(options);
 ```
 
 The `options` parameter is required; available parameters are:
-- `options.subscribe_to` (required), an Array containing one or more `tcp://ip:port/` strings suitable to connect to remote Axon/Blue-Rings servers (default remote port is 4000, see below);
 - `options.host` (required), a string uniquely identifying this host (but normally shorter than the hostname, to reduce memory and bandwidth usage);
+- `options.subscribe_to`, an Array containing one or more `tcp://ip:port/` strings suitable to connect to remote Axon/Blue-Rings servers (default remote port is 4000, see below);
 - `options.pub`, a port number or `tcp://0.0.0.0:port/` string suitable to bind the local Axon publisher (the default will bind on port 4000 on all interfaces);
-- `values`, an object describing how numerical values are interpreted and transmitted.
+- `Value`, an object describing how numerical values are interpreted and transmitted.
 
-The `values` option defaults to providing EcmaScript integers as numerical values, transmitted as base-36 strings to minimize bandwidth.
+The `Value` option defaults to providing EcmaScript integers as numerical values. Since Node.js 10.7.0 BigInt is also supported natively, and can be activated by using `options.Value = BlueRings.bigint` (the default is the equivalent of `options.Value = BlueRings.integer`).
 
 Here is an example for a service storing Big Rationals (arbitrary precision fractions).
 
 ```
     bigRat = require 'big-rational'
     big_rational_values =
-      parse: (t) -> bigRat t
-      toString: (n) -> n.toString()
+      deserialize: (t) -> bigRat t
+      serialize: (n) -> n.toString()
       add: (n1,n2) -> n1.add n2
       zero: bigRat.zero
 
-    const ring = BlueRings(options,big_rational_values);
+    options.Value = big_rational_values
+    const ring = BlueRings(options);
 ```
 
 Methods
@@ -43,6 +46,8 @@ Methods
 `ring.get_counter(name) → [coherent,value]`
 
 This implements a counter `name` by adding value `amount`, keeping it until `expire`. Returns a boolean indicating whether the network is coherent (not-split etc.) and a number representing the new value of the counter.
+
+Note that `amount`, `new_value`, `value` are of the type specified by the `Value` option; by default they are native Javascript numbers but might be `BigInt`, `bigRat`, etc.
 
 Internals
 ---------
@@ -59,7 +64,6 @@ Each ticket must be globally unique: tickets with identical contents are conside
 
 ### Network Protocol
 
-The protocol uses three packet types:
-- `ping()` is used to detect failures in remotes
-- `new-tickets(name,expire,hash,array-of-tickets)`
-- `request-tickets(name)`
+The protocol uses two packet types:
+- `ping()` is used to detect failures in remotes (and compute the `coherent` boolean flag);
+- `new-tickets(name,expire,hash,array-of-tickets)` is used to transmit changes to the database.

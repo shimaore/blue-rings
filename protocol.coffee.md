@@ -4,7 +4,6 @@
 
     EXPIRE = 'expire'
     HASH = 'hash'
-    TICKETS = 'tickets'
 
 From a protocol perspective, this should use SCTP as the underlying protocol.
 However SCTP is not in libuv, and therefor not in Node.js.
@@ -26,30 +25,37 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
           console.error error
 
     class BlueRingAxon extends BlueRing
-      constructor: (Value,options) ->
-        super Value
+      constructor: (options) ->
+        super options.Value
+
+Statistics
 
         @recv = BigInt 0
         @sent = BigInt 0
 
-        {@forward_delay = 3} = options
-        {@flood_delay = 500} = options
-        {@connect_delay = 1} = options
+Options
+
+        {
+          @host
+          subscribe_to
+          @forward_delay = 3
+          @flood_delay = 500
+          @connect_delay = 1
+        } = options
+
+Map of name-to-timer to throttle sending messages out (used to implement the delays)
+
+        @__sendall = new Map()
 
         @ev = new EventEmitter2
-        {@host} = options
+
+Publisher (sends data out)
+
         @pub = Axon.socket 'pub'
         @pub.once 'bind', =>
-          # console.log 'bind', @host
           @ev.emit 'bind'
         @pub.on 'connect', =>
-          # console.log 'pub: connect', @host
           @on_connect()
-
-        @sendall = new Map()
-
-        @subs = new Map()
-        @connected = 0
 
         ping = =>
           @send PING_PACKET
@@ -57,7 +63,19 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
         @pub.bind options.pub ? DEFAULT_PORT
         @timer = setInterval ping, PING_INTERVAL
 
-        options.subscribe_to?.forEach (o) => @subscribe_to o
+Subscribers (receive data)
+
+        @subs = new Map()
+
+Boolean indicating that all subscribers are operational
+
+        @connected = 0
+
+Subscribe to each remote
+
+        subscribe_to?.forEach (o) => @subscribe_to o
+
+        return
 
 Public operations
 
@@ -74,12 +92,12 @@ Public operations
         @send_tickets {name,expire,hash,tickets,source:@host}, @pub
 
       invalidate: (name) ->
-        if @sendall.has name
-          clearTimeout @sendall.get name
-          @sendall.delete name
+        if @__sendall.has name
+          clearTimeout @__sendall.get name
+          @__sendall.delete name
 
       postpone: (name,delay,f) ->
-        @sendall.set name, setTimeout f, delay
+        @__sendall.set name, setTimeout f, delay
 
       subscribe_to: (o) ->
         sub = Axon.socket 'sub'
@@ -93,12 +111,15 @@ Message encoding:
 - `request-tickets(name)` is encoded as `"#{name}"`
 - `new-tickets(name,value,array-of-tickets)` is encoded as :1
 
+        deserialize_ticket = ([key,value]) => [key,(@Value.deserialize value)]
+
         receive = wrap (msg) =>
           switch
             when msg is PING_PACKET
               ping_received++
 
             when typeof msg is 'object'
+              # console.log 'receive', @host, msg
               @recv++
 
               name = msg.n
@@ -118,8 +139,9 @@ Avoid processing messages we sent
                 hash = local.get HASH
                 return if expire is msg.e and hash.equals remote_hash
 
-              tickets = new Map msg.t
+              tickets = new Map msg.t.map deserialize_ticket
 
+              # console.log 'received', @host, name, msg.e, remote_hash, tickets
               res = @on_new_tickets name, msg.e, remote_hash, tickets, sub
 
               sendall = =>
@@ -190,6 +212,8 @@ Broadcast all of our tickets
           clearInterval timer
         return
 
+Private
+
       on_connect: (sub) ->
         @enumerate_local_counters (res) =>
           {name} = res
@@ -203,14 +227,19 @@ Broadcast all of our tickets
 
       send_tickets: ({name,expire,hash,tickets,source},socket) ->
         # console.log 'send_tickets', @host, name, expire, hash.toString('hex'), (if tickets.size > 4 then tickets.size else tickets), source
-        @sent++
+
+        serialize_ticket = ([key,value]) => [key,(@Value.serialize value)]
+
         msg =
           n: name
           e: expire
           H: hash
-          t: Array.from tickets.entries()
+          t: Array.from(tickets.entries()).map serialize_ticket
           s: source
           h: @host
         @send msg, socket
+
+        @sent++
+        return
 
     module.exports = BlueRingAxon

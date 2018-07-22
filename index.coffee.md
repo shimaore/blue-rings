@@ -5,11 +5,13 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
 
     run = (options) ->
 
+      options.Value ?= integer_values
+
       {Value} = options
 
       {add} = Value
 
-      service = new BlueRingAxon Value, options
+      service = new BlueRingAxon options
       once = (e) -> new Promise (resolve) -> service.ev.once e, resolve
       bound = once 'bind'
       connected = once 'connected'
@@ -56,9 +58,18 @@ Tickets are [key,value] pairs.
 
 `values` interface for integers
 
+    ###
     integer_values =
-      parse: (t) -> if t? then parseInt t, 36 else null
-      toString: (n) -> n.toString 36
+      deserialize: (t) -> parseInt t, 36
+      serialize: (n) -> n.toString 36
+      add: (n1,n2) -> n1+n2
+      zero: 0
+      accept: Number
+    ###
+
+    integer_values =
+      deserialize: (t) -> t
+      serialize: (n) -> n
       add: (n1,n2) -> n1+n2
       zero: 0
       accept: Number
@@ -66,8 +77,8 @@ Tickets are [key,value] pairs.
 `values` interface for big integers (require Node.js 10.7.0 or above)
 
     bigint_values =
-      parse: (t) -> if t? then BigInt t else null
-      toString: (n) -> n.toString 10
+      deserialize: (t) -> BigInt t
+      serialize: (n) -> n.toString()
       add: (n1,n2) -> n1+n2
       zero: BigInt 0
       accept: BigInt

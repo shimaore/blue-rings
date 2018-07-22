@@ -26,7 +26,8 @@
 
 BlueRing is a store for (opaque) tickets.
 
-Tickets (as transmitted in the protocol) are expected to be {key:value} pairs.
+Tickets (as transmitted in the protocol) are expected to be [key:value] pairs, and are
+stored (in this module) as a Map.
 
     TICKETS = 'tickets'
     EXPIRE  = 'expire'

@@ -1,133 +1,158 @@
-    crypto = require 'crypto'
-
-    union = (set1,set2) ->
-      if set1.size is 0
-        return set2
-      if set2.size is 0
-        return set1
-
-      set = new Map [set1...,set2...]
-      if set.size is set1.size
-        set1
-      else
-        set
-
-    diff = (set1,set2) ->
-      if set2.size is 0
-        return set1
-      set = new Map set1
-      for k from set2.keys()
-        if set1.has k
-          set.delete k
-      if set.size is set1.size
-        set1
-      else
-        set
-
-BlueRing is a store for (opaque) tickets.
-
-Tickets (as transmitted in the protocol) are expected to be [key:value] pairs, and are
-stored (in this module) as a Map.
-
-    TICKETS = 'tickets'
     EXPIRE  = 'expire'
-    HASH    = 'hash'
-    VALUE   = 'value'
+    PLUS  = '+'
+    MINUS = '-'
+    COUNTER = 'counter'
 
-    ALGO = 'md5'
+Delta-state C(v)RDT
 
-    hash_set = (name,tickets) ->
-      h = crypto.createHash(ALGO).update name
-      for k from tickets.keys()
-        h.update k
-      h.digest()
+We implement the CvRDT here. The delta-state is handled by the protocol.
+
+    class GrowCounter
+
+See e.g. [GrowCounter](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Counter_(Grow-only_Counter))
+We store the increments for each node we know about.
+
+      constructor: (@Value,@me) ->
+        @increments = new Map()
+
+      increment: (amount) ->
+        increment = @Value.add amount, (@increments.get @me) ? @Value.zero
+        @increments.set @me, increment
+        increment
+
+      update: (source,increment) ->
+        previous = (@increments.get source) ? @Value.zero
+        new_increment = @Value.max previous, increment
+        if @Value.equals new_increment, previous
+          null
+        else
+          @increments.set source, new_increment
+          new_increment
+
+      value: ->
+        value = @Value.zero
+        for v from @increments.values()
+          value = @Value.add value, v
+        value
+
+      all: ->
+        @increments.entries()
+
+    class Counter
+      constructor: (@Value,@me) ->
+        @pluses = new GrowCounter @Value, @me
+        @minuses = new GrowCounter @Value, @me
+
+      increment: (amount) ->
+        switch
+          when @Value.is_positive amount
+            [PLUS, @me, @pluses.increment amount]
+
+          when @Value.is_negative amount
+            [MINUS, @me, @minuses.increment @Value.abs amount]
+
+          else
+            null
+
+      update: (dir,source,increment) ->
+        switch dir
+          when PLUS
+            @pluses.update source, increment
+          when MINUS
+            @minuses.update source, increment
+
+      value: ->
+        @Value.subtract @pluses.value(), @minuses.value()
+
+      all: ->
+        all = []
+        for [source,increment] from @pluses.all()
+          all.push [PLUS,source,increment]
+        for [source,increment] from @minuses.all()
+          all.push [MINUS,source,increment]
+        all
+
+    expired = (expire) -> expire < Date.now()
 
     class BlueRing
-      constructor: (@Value,@initial) ->
+      constructor: (@Value,@host) ->
         @store = new Map()
 
 Public operations
 
       add_counter: (name,expire) ->
-        @add_local_tickets name, expire, new Map()
+        @add_local_amount name, @Value.zero, expire
 
-      add_ticket: (name,ticket,expire) ->
-        @add_local_tickets name, expire, new Map [ticket]
+      add_amount: (name,amount,expire) ->
+        @add_local_amount name, amount, expire
 
       get_expire: (name) ->
         @store.get(name)?.get EXPIRE
 
-      get_hash: (name) ->
-        @get_local_counter(name)?.get HASH
-
       get_value: (name) ->
-        @get_local_counter(name)?.get VALUE
-
-Private operations
-
-      get_local_counter: (name) ->
-        expire = @get_expire(name) ? 0
-        if expire > Date.now()
+        L = @store.get name
+        return null unless L?
+        expire = L.get EXPIRE
+        if not expired expire
           @store.get name
+          L.get(COUNTER).value()
         else
           @store.delete name
           null
 
+Private operations
+
+      __counter: (name,expire) ->
+        L = @store.get(name)
+
+        if L?
+          if expire?
+            L.set EXPIRE, expire if expire > L.get EXPIRE
+        else
+          L = new Map()
+          L.set COUNTER, new Counter(@Value,@host)
+          if expire?
+            L.set EXPIRE, expire
+            @store.set name, L
+          else
+            L.set EXPIRE, 0
+
+        L
+
 Tool
 
-      add_local_tickets: (name,expire,these_tickets) ->
+      add_local_amount: (name,amount,expire) ->
 
-        L = @store.get(name) ? new Map()
+        L = @__counter name, expire
 
-        old_tickets = L.get(TICKETS) ? new Map()
-        new_tickets = union old_tickets, these_tickets
-        forwarded_tickets = diff new_tickets, old_tickets
+        change = L.get(COUNTER).increment amount
 
-No changes, make sure we're consistent.
-
-        if new_tickets is old_tickets
-          unless L.has HASH
-            L.set HASH,  hash_set name, new_tickets
-          unless L.has VALUE
-            L.set VALUE, Array.from(new_tickets.values()).reduce @Value.add, @Value.zero
-
-Changes occurred, update!
-
-        else
-          L.set TICKETS, new_tickets
-          L.set HASH,  hash_set name, new_tickets
-          L.set VALUE, Array.from(forwarded_tickets.values()).reduce @Value.add, (L.get VALUE) ? @Value.zero
-
-        if expire? and ((not L.has EXPIRE) or (expire > L.get EXPIRE))
-          L.set EXPIRE, expire
-
-        @store.set name, L
-        [forwarded_tickets,L]
+        expire_now = L.get EXPIRE
+        return if expire is expire_now and not change?
+        {name,expire:expire_now,changes:[change],source:@host}
 
 Message handlers
 
-      on_new_tickets: (name,expire,expected_hash,received_tickets,socket) ->
-        [tickets,L] = @add_local_tickets name, expire, received_tickets
-        expire = L.get EXPIRE
-        hash = L.get HASH
+      on_new_changes: (name,expire,changes,source,socket) ->
+        L = @__counter name, expire
+        counter = L.get COUNTER
+        forward = changes
+          .map ([dir,source,increment]) ->
+            increment = counter.update dir,source,increment
+            [ dir, source, increment ]
+          .filter ([dir,source,increment]) -> increment?
 
-If the hashes do not match after the update (some neighbor(s) is missing some of our tickets),
-we send a new message (marked as originating from ourselves) containing all of our tickets.
+        # console.log 'forward', @host, forward
+        expire_now = L.get EXPIRE
 
-        if not expected_hash.equals hash
-          tickets = diff L.get(TICKETS), tickets
-          {name,expire,hash,tickets,source:true}
-
-If the hashes match, we simply forward on behalf of the original sender.
-
-        else
-          {name,expire,hash,tickets,source:false}
+        return if expire is expire_now and forward.length is 0
+        {name,expire:expire_now,changes:forward,source}
 
       enumerate_local_counters: (cb) ->
-        @store.forEach (L,name) ->
+        @store.forEach (L,name) =>
           expire = L.get EXPIRE
-          hash = L.get HASH
-          tickets = L.get TICKETS
-          cb {name,expire,hash,tickets}
+          return if expired expire
+          changes = L.get(COUNTER).all()
+          cb {name,expire,changes,source:@host}
 
     module.exports = BlueRing

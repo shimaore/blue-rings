@@ -24,18 +24,26 @@
 
             NAME = 'bear'
             m.setup_counter NAME, Date.now()+4000
+
             v = m.update_counter NAME, Value.accept 3
             v.should.have.length 2
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 3
+
             v = m.update_counter NAME, Value.accept 2
             v.should.have.length 2
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 5
+            await sleep 5
             v = m.get_counter NAME
             v.should.have.length 2
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 5
+
+            v = m.update_counter NAME, Value.accept -10
+            v.should.have.length 2
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept -5
 
           it 'should accumulate values across two servers', ->
             port1 = port++
@@ -90,6 +98,17 @@
             v = m2.get_counter(NAME)
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 52
+
+            v = m2.update_counter NAME, Value.accept -30
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 22
+            await sleep 5
+            v = m1.get_counter(NAME)
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 22
+            v = m2.get_counter(NAME)
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 22
 
 
           it 'should accumulate values across two disconnected servers', ->
@@ -328,7 +347,7 @@
             v.should.have.property 1, Value.accept 95
 
             m3 = M
-              host: 'β'
+              host: 'γ'
               pub: tcp port3
               subscribe_to: [
                 tcp port1
@@ -381,7 +400,7 @@
             start = Date.now()
             runs = 1000
             for j in [0...runs]
-              v = Math.ceil 100*Math.random()
+              v = Math.ceil -50+100*Math.random()
               sum += v
               x = Math.ceil ms.length * Math.random()
               x = ms.length-1 if x >= ms.length
@@ -425,9 +444,9 @@
             @timeout 3000
             load (l,i1,i2) -> if i1 is 0 then i2 isnt 0 else i2 is 0
 
-          it.skip 'should accumulate a whole bunch of values across a whole bunch of servers (dual star)', ->
-            @timeout 15000
-            load ((l,i1,i2) -> (if i1 is 0 then i2 isnt 0 else i2 is 0) or (if i1 is 1 then i2 isnt 1 else i2 is 1)),
+          it.only 'should accumulate a whole bunch of values across a whole bunch of servers (dual star)', ->
+            @timeout 25000
+            load 20000, ((l,i1,i2) -> (if i1 is 0 then i2 isnt 0 else i2 is 0) or (if i1 is 1 then i2 isnt 1 else i2 is 1)),
               forward_delay: 20, flood_delay: 1200, connect_delay: 1500
 
           it.skip 'should accumulate a whole bunch of values across a whole bunch of servers (triple star)', ->

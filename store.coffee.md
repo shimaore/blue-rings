@@ -23,11 +23,8 @@ We store the increments for each node we know about.
       update: (source,increment) ->
         previous = (@increments.get source) ? @Value.zero
         new_increment = @Value.max previous, increment
-        if @Value.equals new_increment, previous
-          null
-        else
-          @increments.set source, new_increment
-          new_increment
+        @increments.set source, new_increment
+        new_increment
 
       value: ->
         value = @Value.zero
@@ -136,23 +133,33 @@ Message handlers
       on_new_changes: (name,expire,changes,source,socket) ->
         L = @__counter name, expire
         counter = L.get COUNTER
+        changed = false
         forward = changes
-          .map ([dir,source,increment]) ->
-            increment = counter.update dir,source,increment
-            [ dir, source, increment ]
-          .filter ([dir,source,increment]) -> increment?
+          .map ([dir,source,increment]) =>
+            new_increment = counter.update dir,source,increment
+            unless @Value.equals increment, new_increment
+              changed = true
+            [ dir, source, new_increment ]
 
-        # console.log 'forward', @host, forward
         expire_now = L.get EXPIRE
+        {name,expire:expire_now,changes:forward,changed,source:@host}
 
-        return if expire is expire_now and forward.length is 0
-        {name,expire:expire_now,changes:forward,source}
+      on_send: (name,expire,changes,socket) ->
+        L = @__counter name, expire
+        counter = L.get COUNTER
+        changes.forEach ([dir,source,increment]) =>
+          counter.update dir,source,increment
+
+        expire = L.get EXPIRE
+        changes = counter.all()
+        {name,expire,changes,source:@host}
 
       enumerate_local_counters: (cb) ->
-        @store.forEach (L,name) =>
+        for [name,L] from @store.entries()
           expire = L.get EXPIRE
-          return if expired expire
-          changes = L.get(COUNTER).all()
-          cb {name,expire,changes,source:@host}
+          unless expired expire
+            changes = L.get(COUNTER).all()
+            await cb {name,expire,changes,source:@host}
+        return
 
     module.exports = BlueRing

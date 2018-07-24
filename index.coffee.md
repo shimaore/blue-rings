@@ -43,9 +43,13 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
         sent_changes: service.sent_changes
 
       end = ->
-        service.close()
+        service.destructor()
+        service.store
 
-      {setup_counter,update_counter,get_counter,bound,connected,statistics,end}
+      subscribe_to = (port) ->
+        service.subscribe_to port
+
+      {setup_counter,update_counter,get_counter,bound,connected,statistics,end,subscribe_to}
 
 `values` interface for integers
 

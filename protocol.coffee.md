@@ -23,6 +23,8 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
         catch error
           console.error error
 
+    sleep = (timeout) -> new Promise (resolve) -> setTimeout resolve, timeout
+
     class BlueRingAxon extends BlueRing
       constructor: (options) ->
         super options.Value
@@ -39,8 +41,9 @@ Options
         {
           @host
           subscribe_to
-          @forward_delay = 1000
-          @connect_delay = 1500
+          @forward_delay =     97
+          @connect_delay =   1511
+          @flood_interval = 59141
         } = options
 
 Map of name-to-timer to throttle sending messages out (used to implement the delays)
@@ -60,8 +63,12 @@ Publisher (sends data out)
         ping = =>
           @send PING_PACKET
 
+        flood = =>
+          @on_connect()
+
         @pub.bind options.pub ? DEFAULT_PORT
         @timer = setInterval ping, PING_INTERVAL
+        @flood = setInterval flood, @flood_interval unless @flood_interval < PING_INTERVAL or @flood_interval is Infinity
 
 Subscribers (receive data)
 
@@ -77,22 +84,26 @@ Subscribe to each remote
 
         return
 
+      destructor: ->
+        @close()
+        @ev.removeAllListeners()
+        clearInterval @timer
+        clearInterval @flood
+        return
+
 Public operations
 
       add_counter: (name,expire) ->
         data = super name, expire
-        @send_data data, @pub if data?
+        @send_data data, [], @pub if data?
 
       add_amount: (name,amount,expire) ->
         data = super name, amount, expire
-        @send_data data, @pub if data?
-
-      invalidate: (name) ->
-        if @__sendall.has name
-          clearTimeout @__sendall.get name
-          @__sendall.delete name
+        @send_data data, [], @pub if data?
 
       postpone: (name,delay,f) ->
+        if @__sendall.has name
+          clearTimeout @__sendall.get name
         @__sendall.set name, setTimeout f, delay
 
       subscribe_to: (o) ->
@@ -120,12 +131,11 @@ Message encoding:
 
               name = msg.n
 
-              @invalidate name
+Avoid processing messages we sent, or messages we forwarded (loop avoidance).
+Note: the length of `msg.R` (the path the message already followed) is a good indication of the radius of the network.
 
-Avoid processing messages we sent
-
-              return if msg.h is @host
               return if msg.s is @host
+              return if @host in msg.R
 
 Avoid processing expired messages
 
@@ -133,13 +143,15 @@ Avoid processing expired messages
 
               changes = msg.c.map deserialize
 
-              # console.log 'received', @host, name, msg.e, changes
-              res = @on_new_changes name, msg.e, changes, msg.s, sub
-              return unless res?
+              # console.log 'received', @host, name, msg.e, changes, msg.R
 
-Forward
+The original code called for only forwarding the original message, updated with our values if they were updated.
 
-              @postpone name, @forward_delay, => @send_data res, null
+However this is not very reliable because things are lossy. It's better to send the entire set every time we get an update, which gives a chance to server which are behind to catch up.
+
+              res = @on_send name, msg.e, changes, sub
+              @postpone name, @forward_delay, =>
+                @send_data res, msg.R, null
 
           return
 
@@ -197,16 +209,20 @@ Private
       on_connect: (sub) ->
         @enumerate_local_counters (res) =>
           {name} = res
-          @invalidate name
           @postpone name, @connect_delay, =>
-            console.log 'on_connect', @host
-            @send_data res, sub
+            @send_data res, [], sub
+
+Rate-limit to 1000 per second.
+
+          await sleep 1
+          return
+        return
 
       send: (msg,socket) ->
         @pub.send msg
 
-      send_data: ({name,expire,changes,source},socket) ->
-        console.log 'send_data', @host, name, expire, changes, source
+      send_data: ({name,expire,changes,source},route,socket) ->
+        # console.log 'send_data', @host, name, expire, changes, source, route
 
         serialize = ([dir,host,value]) => [dir,host,(@Value.serialize value)]
 
@@ -215,7 +231,7 @@ Private
           e: expire
           c: changes.map serialize
           s: source
-          h: @host
+          R: [@host,route...]
         @send msg, socket
 
         @sent++

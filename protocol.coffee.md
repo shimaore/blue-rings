@@ -3,7 +3,6 @@
     PING_PACKET = ''
 
     EXPIRE = 'expire'
-    HASH = 'hash'
 
 From a protocol perspective, this should use SCTP as the underlying protocol.
 However SCTP is not in libuv, and therefor not in Node.js.
@@ -24,6 +23,8 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
         catch error
           console.error error
 
+    sleep = (timeout) -> new Promise (resolve) -> setTimeout resolve, timeout
+
     class BlueRingAxon extends BlueRing
       constructor: (options) ->
         super options.Value
@@ -31,18 +32,18 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
 Statistics
 
         @recv = BigInt 0
-        @recv_tickets = BigInt 0
+        @recv_changes = BigInt 0
         @sent = BigInt 0
-        @sent_tickets = BigInt 0
+        @sent_changes = BigInt 0
 
 Options
 
         {
           @host
           subscribe_to
-          @forward_delay = 1000
-          @flood_delay   = 1200
-          @connect_delay = 1500
+          @forward_delay =     97
+          @connect_delay =   1511
+          @flood_interval = 59141
         } = options
 
 Map of name-to-timer to throttle sending messages out (used to implement the delays)
@@ -62,8 +63,12 @@ Publisher (sends data out)
         ping = =>
           @send PING_PACKET
 
+        flood = =>
+          @on_connect()
+
         @pub.bind options.pub ? DEFAULT_PORT
         @timer = setInterval ping, PING_INTERVAL
+        @flood = setInterval flood, @flood_interval unless @flood_interval < PING_INTERVAL or @flood_interval is Infinity
 
 Subscribers (receive data)
 
@@ -79,26 +84,26 @@ Subscribe to each remote
 
         return
 
+      destructor: ->
+        @close()
+        @ev.removeAllListeners()
+        clearInterval @timer
+        clearInterval @flood
+        return
+
 Public operations
 
       add_counter: (name,expire) ->
-        [tickets,local] = super name, expire
-        expire = local.get EXPIRE
-        hash = local.get HASH
-        @send_tickets {name,expire,hash,tickets,source:@host}, @pub
+        data = super name, expire
+        @send_data data, [], @pub if data?
 
-      add_ticket: (name,ticket,expire) ->
-        [tickets,local] = super name, ticket, expire
-        expire = local.get EXPIRE
-        hash = local.get HASH
-        @send_tickets {name,expire,hash,tickets,source:@host}, @pub
-
-      invalidate: (name) ->
-        if @__sendall.has name
-          clearTimeout @__sendall.get name
-          @__sendall.delete name
+      add_amount: (name,amount,expire) ->
+        data = super name, amount, expire
+        @send_data data, [], @pub if data?
 
       postpone: (name,delay,f) ->
+        if @__sendall.has name
+          clearTimeout @__sendall.get name
         @__sendall.set name, setTimeout f, delay
 
       subscribe_to: (o) ->
@@ -110,10 +115,9 @@ Public operations
 
 Message encoding:
 - `ping()` is encoded as `true`
-- `request-tickets(name)` is encoded as `"#{name}"`
 - `new-tickets(name,value,array-of-tickets)` is encoded as :1
 
-        deserialize_ticket = ([key,value]) => [key,(@Value.deserialize value)]
+        deserialize = ([dir,host,value]) => [dir,host,(@Value.deserialize value)]
 
         receive = wrap (msg) =>
           switch
@@ -123,46 +127,31 @@ Message encoding:
             when typeof msg is 'object'
               # console.log 'receive', @host, msg
               @recv++
-              @recv_tickets += BigInt msg.t.length
+              @recv_changes += BigInt msg.c.length
 
               name = msg.n
 
-              @invalidate name
+Avoid processing messages we sent, or messages we forwarded (loop avoidance).
+Note: the length of `msg.R` (the path the message already followed) is a good indication of the radius of the network.
 
-Avoid processing messages we sent
-
-              return if msg.h is @host
               return if msg.s is @host
+              return if @host in msg.R
 
-              local = @get_local_counter name
-              # assert msg.H?.type is 'Buffer'
-              remote_hash = Buffer.from msg.H.data
-              if local?
-                expire = local.get EXPIRE
-                hash = local.get HASH
-                return if expire is msg.e and hash.equals remote_hash
+Avoid processing expired messages
 
-              tickets = new Map msg.t.map deserialize_ticket
+              return if msg.e < Date.now()
 
-              # console.log 'received', @host, name, msg.e, remote_hash, tickets
-              res = @on_new_tickets name, msg.e, remote_hash, tickets, sub
+              changes = msg.c.map deserialize
 
-              sendall = =>
-                @send_tickets res, null
-                return
+              # console.log 'received', @host, name, msg.e, changes, msg.R
 
-Forward
+The original code called for only forwarding the original message, updated with our values if they were updated.
 
-              if res.source is false
-                return if res.tickets.size is 0
-                res.source = msg.s
-                @postpone name, @forward_delay, sendall
+However this is not very reliable because things are lossy. It's better to send the entire set every time we get an update, which gives a chance to server which are behind to catch up.
 
-Broadcast all of our tickets
-
-              else
-                res.source = @host
-                @postpone name, @flood_delay, sendall
+              res = @on_send name, msg.e, changes, sub
+              @postpone name, @forward_delay, =>
+                @send_data res, msg.R, null
 
           return
 
@@ -220,30 +209,33 @@ Private
       on_connect: (sub) ->
         @enumerate_local_counters (res) =>
           {name} = res
-          @invalidate name
+          @postpone name, @connect_delay, =>
+            @send_data res, [], sub
 
-          res.source = @host
-          @postpone name, @connect_delay, => @send_tickets res, sub
+Rate-limit to 1000 per second.
+
+          await sleep 1
+          return
+        return
 
       send: (msg,socket) ->
         @pub.send msg
 
-      send_tickets: ({name,expire,hash,tickets,source},socket) ->
-        # console.log 'send_tickets', @host, name, expire, hash.toString('hex'), (if tickets.size > 4 then tickets.size else tickets), source
+      send_data: ({name,expire,changes,source},route,socket) ->
+        # console.log 'send_data', @host, name, expire, changes, source, route
 
-        serialize_ticket = ([key,value]) => [key,(@Value.serialize value)]
+        serialize = ([dir,host,value]) => [dir,host,(@Value.serialize value)]
 
         msg =
           n: name
           e: expire
-          H: hash
-          t: Array.from(tickets.entries()).map serialize_ticket
+          c: changes.map serialize
           s: source
-          h: @host
+          R: [@host,route...]
         @send msg, socket
 
         @sent++
-        @sent_tickets += BigInt tickets.size
+        @sent_changes += BigInt changes.length
         return
 
     module.exports = BlueRingAxon

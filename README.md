@@ -21,7 +21,6 @@ The `options` parameter is required; available parameters are:
 - `options.subscribe_to`, an Array containing one or more `tcp://ip:port/` strings suitable to connect to remote Axon/Blue-Rings servers (default remote port is 4000, see below);
 - `options.pub`, a port number or `tcp://0.0.0.0:port/` string suitable to bind the local Axon publisher (the default will bind on port 4000 on all interfaces);
 - `options.forward_delay`, the number of milliseconds to wait for no updates on a counter before forwarding an update (default: 1000ms);
-- `options.flood_delay`, the number of milliseconds to wait for no updates on a counter before sending a full update, when we detected a connected, remote server is out-of-sync (default: 1200ms);
 - `options.connect_delay`, the number of milliseconds to wait for no updates on a counter before sending a full update, when a remote server connects (default: 1500ms);
 - `options.Value`, an object describing how numerical values are interpreted and transmitted.
 
@@ -35,7 +34,7 @@ Also note that a server might be subscribed-to other servers and not update coun
 
 ### Timers
 
-The timers `forward_delay`, `flood_delay`, and `connect_delay` are set by default to values adequate for a full-mesh or near-full-mesh setup. If your topology of choice is different, which is probably the case beyond a handful of servers since full-mesh will not scale much, the timers will need to be adapted based on which role you give each server; there are examples in the test suite, and here are some guidelines:
+The timers `forward_delay` and `connect_delay` are set by default to values adequate for a full-mesh or near-full-mesh setup. If your topology of choice is different, which is probably the case beyond a handful of servers since full-mesh will not scale much, the timers will need to be adapted based on which role you give each server; there are examples in the test suite, and here are some guidelines:
 - on a server that does a lot of message forwarding (for example an apex server in a star topology), the `forward_delay` should be kept very low (i.e. 0 or 1ms) to ensure quick propagation of updates;
 - in a setup with limited connections between servers, `flood_delay` should be kept relatively low (200ms for example) to ease convergence;
 - conversely, on a full-mesh network, all timers should be kept high so that individual updates (which will flood the network) are the primary source of updates;

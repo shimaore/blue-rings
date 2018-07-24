@@ -32,47 +32,37 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
         assert 'string' is typeof name, 'update_counter: name is required'
         assert amount?, 'update_counter: amount is required'
 
-Note how we also use BigInt for hrtime.
-
-        timestamp = process.hrtime.bigint()
-
-Tickets are [key,value] pairs.
-
-        ticket = [
-          [timestamp.toString(36),options.host].join ' '
-          amount
-        ]
-
-        service.add_ticket name, ticket, expire
+        service.add_amount name, amount, expire
 
         get_counter name
 
       statistics = ->
         recv: service.recv
-        recv_tickets: service.recv_tickets
+        recv_changes: service.recv_changes
         sent: service.sent
-        sent_tickets: service.sent_tickets
+        sent_changes: service.sent_changes
 
       end = ->
-        service.close()
+        service.destructor()
+        service.store
 
-      {setup_counter,update_counter,get_counter,bound,connected,statistics,end}
+      subscribe_to = (port) ->
+        service.subscribe_to port
+
+      {setup_counter,update_counter,get_counter,bound,connected,statistics,end,subscribe_to}
 
 `values` interface for integers
 
-    ###
     integer_values =
       deserialize: (t) -> parseInt t, 36
       serialize: (n) -> n.toString 36
       add: (n1,n2) -> n1+n2
-      zero: 0
-      accept: Number
-    ###
-
-    integer_values =
-      deserialize: (t) -> t
-      serialize: (n) -> n
-      add: (n1,n2) -> n1+n2
+      equals: (n1,n2) -> n1 is n2
+      abs: (n) -> if n < 0 then -n else n
+      subtract: (n1,n2) -> n1-n2
+      is_positive: (n) -> n > 0
+      is_negative: (n) -> n < 0
+      max: (n1,n2) -> if n1 > n2 then n1 else n2
       zero: 0
       accept: Number
 
@@ -82,6 +72,12 @@ Tickets are [key,value] pairs.
       deserialize: (t) -> BigInt t
       serialize: (n) -> n.toString()
       add: (n1,n2) -> n1+n2
+      equals: (n1,n2) -> n1 is n2
+      abs: (n) -> if n < BigInt 0 then -n else n
+      subtract: (n1,n2) -> n1-n2
+      is_positive: (n) -> n > BigInt 0
+      is_negative: (n) -> n < BigInt 0
+      max: (n1,n2) -> if n1 > n2 then n1 else n2
       zero: BigInt 0
       accept: BigInt
 

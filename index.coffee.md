@@ -44,7 +44,7 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
 
       end = ->
         service.destructor()
-        service.store
+        return
 
       subscribe_to = (port) ->
         service.subscribe_to port

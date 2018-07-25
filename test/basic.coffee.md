@@ -446,8 +446,7 @@
               outcome++ if success
               console.log "Server #{i[j]}", x, sum, m.statistics(), unless success then '←' else ''
 
-              C = m.end().get(NAME).get('counter')
-              # console.log C.pluses.me, Array.from(C.pluses.increments.entries()), Array.from(C.minuses.increments.entries())
+              m.end()
 
             return Promise.reject new Error "Only synchronized #{outcome} servers out of #{ms.length}" unless outcome is ms.length
             return

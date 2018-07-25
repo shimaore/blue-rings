@@ -3,6 +3,8 @@
     MINUS = '-'
     COUNTER = 'counter'
 
+    nextTick = -> new Promise process.nextTick
+
 Delta-state C(v)RDT
 
 We implement the CvRDT here. The delta-state is handled by the protocol.
@@ -71,9 +73,21 @@ We store the increments for each node we know about.
 
     expired = (expire) -> expire < Date.now()
 
+    collect = (store) ->
+      for [name,L] from store.entries()
+        expire = L.get EXPIRE
+        @store.delete name if expired expire
+        await nextTick()
+      return
+
     class BlueRing
       constructor: (@Value,@host) ->
         @store = new Map()
+        @__collector = setInterval collect, 3600*1000, @store
+
+      destructor: ->
+        clearInterval @__collector
+        return
 
 Public operations
 

@@ -85,6 +85,7 @@ Subscribe to each remote
         return
 
       destructor: ->
+        super()
         @close()
         @ev.removeAllListeners()
         clearInterval @timer

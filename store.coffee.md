@@ -1,75 +1,7 @@
-    EXPIRE  = 'expire'
-    PLUS  = '+'
-    MINUS = '-'
-    COUNTER = 'counter'
+    EXPIRE  = 'E'
+    VALUE   = 'V'
 
     nextTick = -> new Promise process.nextTick
-
-Delta-state C(v)RDT
-
-We implement the CvRDT here. The delta-state is handled by the protocol.
-
-    class GrowCounter
-
-See e.g. [GrowCounter](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#G-Counter_(Grow-only_Counter))
-We store the increments for each node we know about.
-
-      constructor: (@Value,@me) ->
-        @increments = new Map()
-
-      increment: (amount) ->
-        increment = @Value.add amount, (@increments.get @me) ? @Value.zero
-        @increments.set @me, increment
-        increment
-
-      update: (source,increment) ->
-        previous = (@increments.get source) ? @Value.zero
-        new_increment = @Value.max previous, increment
-        @increments.set source, new_increment
-        new_increment
-
-      value: ->
-        value = @Value.zero
-        for v from @increments.values()
-          value = @Value.add value, v
-        value
-
-      all: ->
-        @increments.entries()
-
-    class Counter
-      constructor: (@Value,@me) ->
-        @pluses = new GrowCounter @Value, @me
-        @minuses = new GrowCounter @Value, @me
-
-      increment: (amount) ->
-        switch
-          when @Value.is_positive amount
-            [PLUS, @me, @pluses.increment amount]
-
-          when @Value.is_negative amount
-            [MINUS, @me, @minuses.increment @Value.abs amount]
-
-          else
-            null
-
-      update: (dir,source,increment) ->
-        switch dir
-          when PLUS
-            @pluses.update source, increment
-          when MINUS
-            @minuses.update source, increment
-
-      value: ->
-        @Value.subtract @pluses.value(), @minuses.value()
-
-      all: ->
-        all = []
-        for [source,increment] from @pluses.all()
-          all.push [PLUS,source,increment]
-        for [source,increment] from @minuses.all()
-          all.push [MINUS,source,increment]
-        all
 
     expired = (expire) -> expire < Date.now()
 
@@ -80,8 +12,8 @@ We store the increments for each node we know about.
         await nextTick()
       return
 
-    class BlueRing
-      constructor: (@Value,@host) ->
+    class BlueRingStore
+      constructor: (@Value,@CRDT,@host) ->
         @store = new Map()
         @__collector = setInterval collect, 3600*1000, @store
 
@@ -106,7 +38,7 @@ Public operations
         expire = L.get EXPIRE
         if not expired expire
           @store.get name
-          L.get(COUNTER).value()
+          L.get(VALUE).value()
         else
           @store.delete name
           null
@@ -121,7 +53,7 @@ Private operations
             L.set EXPIRE, expire if expire > L.get EXPIRE
         else
           L = new Map()
-          L.set COUNTER, new Counter(@Value,@host)
+          L.set VALUE, new @CRDT(@Value,@host)
           if expire?
             L.set EXPIRE, expire
             @store.set name, L
@@ -136,7 +68,7 @@ Tool
 
         L = @__counter name, expire
 
-        change = L.get(COUNTER).increment amount
+        change = L.get(VALUE).increment amount
 
         expire_now = L.get EXPIRE
         return if expire is expire_now and not change?
@@ -146,7 +78,7 @@ Message handlers
 
       on_new_changes: (name,expire,changes,source,socket) ->
         L = @__counter name, expire
-        counter = L.get COUNTER
+        counter = L.get VALUE
         changed = false
         forward = changes
           .map ([dir,source,increment]) =>
@@ -160,7 +92,7 @@ Message handlers
 
       on_send: (name,expire,changes,socket) ->
         L = @__counter name, expire
-        counter = L.get COUNTER
+        counter = L.get VALUE
         changes.forEach ([dir,source,increment]) =>
           counter.update dir,source,increment
 
@@ -172,8 +104,8 @@ Message handlers
         for [name,L] from @store.entries()
           expire = L.get EXPIRE
           unless expired expire
-            changes = L.get(COUNTER).all()
+            changes = L.get(VALUE).all()
             await cb {name,expire,changes,source:@host}
         return
 
-    module.exports = BlueRing
+    module.exports = BlueRingStore

@@ -1,3 +1,5 @@
+    {Counter} = require './crdt-counter'
+    BlueRingStore = require './store'
     BlueRingAxon = require './protocol'
     assert = require 'assert'
 
@@ -7,18 +9,20 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
 
       options.Value ?= integer_values
 
-      {Value} = options
+      {Value,host} = options
 
-      {add} = Value
+      CRDT = Counter
 
-      service = new BlueRingAxon options
+      store = new BlueRingStore Value, CRDT, host
+
+      service = new BlueRingAxon Value, store, options
       once = (e) -> new Promise (resolve) -> service.ev.once e, resolve
       bound = once 'bind'
       connected = once 'connected'
 
       get_counter = (name) ->
         assert 'string' is typeof name, 'get_counter: name is required'
-        value = service.get_value name
+        value = store.get_value name
         coherent = service.coherent()
         [coherent,value]
 
@@ -54,8 +58,8 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
 `values` interface for integers
 
     integer_values =
-      deserialize: (t) -> parseInt t, 36
-      serialize: (n) -> n.toString 36
+      deserialize: (t) -> parseInt t, 36  # protocol
+      serialize: (n) -> n.toString 36     # protocol
       add: (n1,n2) -> n1+n2
       equals: (n1,n2) -> n1 is n2
       abs: (n) -> if n < 0 then -n else n
@@ -64,13 +68,13 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
       is_negative: (n) -> n < 0
       max: (n1,n2) -> if n1 > n2 then n1 else n2
       zero: 0
-      accept: Number
+      accept: Number # used for testing
 
 `values` interface for big integers (require Node.js 10.7.0 or above)
 
     bigint_values =
-      deserialize: (t) -> BigInt t
-      serialize: (n) -> n.toString()
+      deserialize: (t) -> BigInt t    # protocol
+      serialize: (n) -> n.toString()  # protocol
       add: (n1,n2) -> n1+n2
       equals: (n1,n2) -> n1 is n2
       abs: (n) -> if n < BigInt 0 then -n else n
@@ -79,6 +83,6 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
       is_negative: (n) -> n < BigInt 0
       max: (n1,n2) -> if n1 > n2 then n1 else n2
       zero: BigInt 0
-      accept: BigInt
+      accept: BigInt # used for testing
 
     module.exports = {run,integer:integer_values,bigint:bigint_values}

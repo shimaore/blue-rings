@@ -2,8 +2,6 @@
     PING_INTERVAL = 150
     PING_PACKET = ''
 
-    EXPIRE = 'expire'
-
 From a protocol perspective, this should use SCTP as the underlying protocol.
 However SCTP is not in libuv, and therefor not in Node.js.
 There is a Node.js module (relying on raw network access) for SCTP but its author marked it as "not production ready".
@@ -12,7 +10,6 @@ There seems to be no SCTP-over-UDP implementations.
 For now I'm using Axon but this is highly unsatisfactory since it means we spam the network on every reconnection.
 
     Axon = require 'axon'
-    BlueRing = require './store'
     {EventEmitter} = require 'events'
 
     wrap = (f) ->
@@ -25,9 +22,9 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
 
     sleep = (timeout) -> new Promise (resolve) -> setTimeout resolve, timeout
 
-    class BlueRingAxon extends BlueRing
-      constructor: (options) ->
-        super options.Value
+    class BlueRingAxon
+      constructor: (@Value,store,options) ->
+        @store = store
 
 Statistics
 
@@ -85,7 +82,7 @@ Subscribe to each remote
         return
 
       destructor: ->
-        super()
+        @store.destructor()
         @close()
         @ev.removeAllListeners()
         clearInterval @timer
@@ -95,11 +92,11 @@ Subscribe to each remote
 Public operations
 
       add_counter: (name,expire) ->
-        data = super name, expire
+        data = @store.add_counter name, expire
         @send_data data, [], @pub if data?
 
       add_amount: (name,amount,expire) ->
-        data = super name, amount, expire
+        data = @store.add_amount name, amount, expire
         @send_data data, [], @pub if data?
 
       postpone: (name,delay,f) ->
@@ -150,7 +147,7 @@ The original code called for only forwarding the original message, updated with 
 
 However this is not very reliable because things are lossy. It's better to send the entire set every time we get an update, which gives a chance to server which are behind to catch up.
 
-              res = @on_send name, msg.e, changes, sub
+              res = @store.on_send name, msg.e, changes, sub
               @postpone name, @forward_delay, =>
                 @send_data res, msg.R, null
 
@@ -208,7 +205,7 @@ However this is not very reliable because things are lossy. It's better to send 
 Private
 
       on_connect: (sub) ->
-        @enumerate_local_counters (res) =>
+        @store.enumerate_local_counters (res) =>
           {name} = res
           @postpone name, @connect_delay, =>
             @send_data res, [], sub

@@ -29,7 +29,7 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
       setup_counter = (name,expire) ->
         assert 'string' is typeof name, 'setup_counter: name is required'
         assert 'number' is typeof expire, 'setup_counter: expire is required'
-        service.add_counter name, expire
+        service.add_entry name, expire
         return
 
       update_counter = (name,amount,expire) ->

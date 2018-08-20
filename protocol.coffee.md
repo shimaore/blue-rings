@@ -91,8 +91,8 @@ Subscribe to each remote
 
 Public operations
 
-      add_counter: (name,expire) ->
-        data = @store.add_counter name, expire
+      add_entry: (name,expire) ->
+        data = @store.add_entry name, expire
         @send_data data, [], @pub if data?
 
       add_amount: (name,amount,expire) ->
@@ -205,7 +205,7 @@ However this is not very reliable because things are lossy. It's better to send 
 Private
 
       on_connect: (sub) ->
-        @store.enumerate_local_counters (res) =>
+        @store.enumerate_local_values (res) =>
           {name} = res
           @postpone name, @connect_delay, =>
             @send_data res, [], sub

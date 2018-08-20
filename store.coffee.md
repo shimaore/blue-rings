@@ -23,7 +23,7 @@
 
 Public operations
 
-      add_counter: (name,expire) ->
+      add_entry: (name,expire) ->
         @add_local_amount name, @Value.zero, expire
 
       add_amount: (name,amount,expire) ->
@@ -45,7 +45,7 @@ Public operations
 
 Private operations
 
-      __counter: (name,expire) ->
+      __retrieve: (name,expire) ->
         L = @store.get(name)
 
         if L?
@@ -66,7 +66,7 @@ Tool
 
       add_local_amount: (name,amount,expire) ->
 
-        L = @__counter name, expire
+        L = @__retrieve name, expire
 
         change = L.get(VALUE).increment amount
 
@@ -77,12 +77,12 @@ Tool
 Message handlers
 
       on_new_changes: (name,expire,changes,source,socket) ->
-        L = @__counter name, expire
-        counter = L.get VALUE
+        L = @__retrieve name, expire
+        value = L.get VALUE
         changed = false
         forward = changes
           .map ([dir,source,increment]) =>
-            new_increment = counter.update dir,source,increment
+            new_increment = value.update dir,source,increment
             unless @Value.equals increment, new_increment
               changed = true
             [ dir, source, new_increment ]
@@ -91,16 +91,16 @@ Message handlers
         {name,expire:expire_now,changes:forward,changed,source:@host}
 
       on_send: (name,expire,changes,socket) ->
-        L = @__counter name, expire
-        counter = L.get VALUE
+        L = @__retrieve name, expire
+        value = L.get VALUE
         changes.forEach ([dir,source,increment]) =>
-          counter.update dir,source,increment
+          value.update dir,source,increment
 
         expire = L.get EXPIRE
-        changes = counter.all()
+        changes = value.all()
         {name,expire,changes,source:@host}
 
-      enumerate_local_counters: (cb) ->
+      enumerate_local_values: (cb) ->
         for [name,L] from @store.entries()
           expire = L.get EXPIRE
           unless expired expire

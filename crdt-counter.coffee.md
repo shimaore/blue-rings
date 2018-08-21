@@ -15,11 +15,12 @@ We store the increments for each node we know about.
         @increments.set @me, increment
         increment
 
-      update: (source,increment) ->
+      update: ([source,increment]) ->
         previous = (@increments.get source) ? @Value.zero
         new_increment = @Value.max previous, increment
         @increments.set source, new_increment
-        new_increment
+        changed = not @Value.equals increment, new_increment
+        [ changed, [ source, new_increment ] ]
 
       value: ->
         value = @Value.zero
@@ -49,12 +50,14 @@ We store the increments for each node we know about.
           else
             null
 
-      update: (dir,source,increment) ->
-        switch dir
+      update: ([dir,source,increment]) ->
+        msg = switch dir
           when PLUS
-            @pluses.update source, increment
+            @pluses.update [source, increment]
           when MINUS
-            @minuses.update source, increment
+            @minuses.update [source, increment]
+        msg[1].unshift dir
+        msg
 
       value: ->
         @Value.subtract @pluses.value(), @minuses.value()

@@ -81,11 +81,10 @@ Message handlers
         value = L.get VALUE
         changed = false
         forward = changes
-          .map ([dir,source,increment]) =>
-            new_increment = value.update dir,source,increment
-            unless @Value.equals increment, new_increment
-              changed = true
-            [ dir, source, new_increment ]
+          .map (msg) =>
+            [ modified, msg ] = value.update msg
+            changed = true if modified
+            msg
 
         expire_now = L.get EXPIRE
         {name,expire:expire_now,changes:forward,changed,source:@host}
@@ -93,8 +92,8 @@ Message handlers
       on_send: (name,expire,changes,socket) ->
         L = @__retrieve name, expire
         value = L.get VALUE
-        changes.forEach ([dir,source,increment]) =>
-          value.update dir,source,increment
+        changes.forEach (msg) ->
+          value.update msg
 
         expire = L.get EXPIRE
         changes = value.all()

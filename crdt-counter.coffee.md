@@ -12,7 +12,8 @@ We store the increments for each node we know about.
 
       increment: (amount) ->
         amount ?= @Value.zero
-        increment = @Value.add amount, (@increments.get @me) ? @Value.zero
+        previous = (@increments.get @me) ? @Value.zero
+        increment = @Value.add previous, amount
         @increments.set @me, increment
         increment
 

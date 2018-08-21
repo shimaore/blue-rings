@@ -11,9 +11,9 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
 
       {Value,host} = options
 
-      CRDT = Counter
+      CRDT = -> new Counter Value, host
 
-      store = new BlueRingStore Value, CRDT, host
+      store = new BlueRingStore CRDT, host
 
       service = new BlueRingAxon Value, store, options
       once = (e) -> new Promise (resolve) -> service.ev.once e, resolve

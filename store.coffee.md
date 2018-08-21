@@ -24,10 +24,10 @@
 Public operations
 
       add_entry: (name,expire) ->
-        @add_local_amount name, @Value.zero, expire
+        @add_local_amount name, expire
 
       add_amount: (name,amount,expire) ->
-        @add_local_amount name, amount, expire
+        @add_local_amount name, expire, amount
 
       get_expire: (name) ->
         @store.get(name)?.get EXPIRE
@@ -64,7 +64,7 @@ Private operations
 
 Tool
 
-      add_local_amount: (name,amount,expire) ->
+      add_local_amount: (name,expire,amount) ->
 
         L = @__retrieve name, expire
 

@@ -11,6 +11,7 @@ We store the increments for each node we know about.
         @increments = new Map()
 
       increment: (amount) ->
+        amount ?= @Value.zero
         increment = @Value.add amount, (@increments.get @me) ? @Value.zero
         @increments.set @me, increment
         increment

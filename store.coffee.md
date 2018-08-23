@@ -82,7 +82,7 @@ Message handlers
         changed = false
         forward = changes
           .map (msg) =>
-            [ modified, msg ] = value.update msg
+            [ modified, msg ] = value.merge msg
             changed = true if modified
             msg
 
@@ -93,7 +93,7 @@ Message handlers
         L = @__retrieve name, expire
         value = L.get VALUE
         changes.forEach (msg) ->
-          value.update msg
+          value.merge msg
 
         expire = L.get EXPIRE
         changes = value.all()

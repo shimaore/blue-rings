@@ -10,6 +10,8 @@ We store the increments for each node we know about.
       constructor: (@Value,@me) ->
         @increments = new Map()
 
+This is called `increment` in [Shapiro,Preguiça,Baquero,Zawirski(2011)] Specification 6.
+
       increment: (amount) ->
         amount ?= @Value.zero
         previous = (@increments.get @me) ? @Value.zero
@@ -17,12 +19,16 @@ We store the increments for each node we know about.
         @increments.set @me, increment
         increment
 
-      update: ([source,increment]) ->
+This is called `merge` in the same paper, with X = existing local payload, Y = incremental payload, Z = new local payload.
+
+      merge: ([source,increment]) ->
         previous = (@increments.get source) ? @Value.zero
         new_increment = @Value.max previous, increment
         @increments.set source, new_increment
         changed = not @Value.equals increment, new_increment
         [ changed, [ source, new_increment ] ]
+
+This is called `query` in the same paper.
 
       value: ->
         value = @Value.zero
@@ -41,6 +47,8 @@ We store the increments for each node we know about.
         @pluses = new GrowCounter @Value, @me
         @minuses = new GrowCounter @Value, @me
 
+The INRIA paper offers `increment` and `decrement` (Specification 7), we combine the two.
+
       increment: (amount) ->
         switch
           when @Value.is_positive amount
@@ -52,12 +60,12 @@ We store the increments for each node we know about.
           else
             null
 
-      update: ([dir,source,increment]) ->
+      merge: ([dir,source,increment]) ->
         msg = switch dir
           when PLUS
-            @pluses.update [source, increment]
+            @pluses.merge [source, increment]
           when MINUS
-            @minuses.update [source, increment]
+            @minuses.merge [source, increment]
         msg[1].unshift dir
         msg
 

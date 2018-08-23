@@ -23,9 +23,6 @@
 
 Public operations
 
-      add_entry: (name,expire) ->
-        @operation name, expire
-
       get_expire: (name) ->
         @store.get(name)?.get EXPIRE
 
@@ -69,7 +66,10 @@ Tool
 
         expire_now = L.get EXPIRE
         return if expire is expire_now and not change?
-        {name,expire:expire_now,changes:[change],source:@host}
+        if change?
+          {name,expire:expire_now,changes:[change],source:@host}
+        else
+          {name,expire:expire_now,changes:[],source:@host}
 
 Message handlers
 

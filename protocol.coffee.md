@@ -91,10 +91,6 @@ Subscribe to each remote
 
 Public operations
 
-      add_entry: (name,expire) ->
-        data = @store.add_entry name, expire
-        @send_data data, [], @pub if data?
-
       operation: (name,expire,op,args) ->
         data = @store.operation name, expire, op, args
         @send_data data, [], @pub if data?

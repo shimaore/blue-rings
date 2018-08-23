@@ -412,6 +412,8 @@
             sum = 0
 
             NAME = 'lion'
+            for m in ms
+              m.setup_counter NAME, Date.now()+80000
 
             start = Date.now()
             runs = 1000

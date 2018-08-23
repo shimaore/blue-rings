@@ -24,10 +24,7 @@
 Public operations
 
       add_entry: (name,expire) ->
-        @add_local_amount name, expire
-
-      add_amount: (name,amount,expire) ->
-        @add_local_amount name, expire, amount
+        @operation name, expire
 
       get_expire: (name) ->
         @store.get(name)?.get EXPIRE
@@ -64,11 +61,11 @@ Private operations
 
 Tool
 
-      add_local_amount: (name,expire,amount) ->
+      operation: (name,expire,op,args) ->
 
         L = @__retrieve name, expire
 
-        change = L.get(VALUE).increment amount
+        change = L.get(VALUE)[op]? args...
 
         expire_now = L.get EXPIRE
         return if expire is expire_now and not change?

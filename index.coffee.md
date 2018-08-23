@@ -3,7 +3,7 @@
     BlueRingAxon = require './protocol'
     assert = require 'assert'
 
-Public API for a service storing EcmaScript numbers (transmitted as base-36 strings).
+Public API for a service storing EcmaScript counters and text.
 
     run = (options) ->
 
@@ -37,7 +37,7 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
         assert 'string' is typeof name, 'update_counter: name is required'
         assert amount?, 'update_counter: amount is required'
 
-        service.add_amount name, amount, expire
+        service.operation name, expire, 'increment', [amount]
 
         get_counter name
 

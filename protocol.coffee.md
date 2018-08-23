@@ -95,8 +95,8 @@ Public operations
         data = @store.add_entry name, expire
         @send_data data, [], @pub if data?
 
-      add_amount: (name,amount,expire) ->
-        data = @store.add_amount name, amount, expire
+      operation: (name,expire,op,args) ->
+        data = @store.operation name, expire, op, args
         @send_data data, [], @pub if data?
 
       postpone: (name,delay,f) ->

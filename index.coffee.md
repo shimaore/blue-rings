@@ -1,4 +1,4 @@
-    {Counter} = require './crdt-counter'
+    counter = require './crdt-counter'
     BlueRingStore = require './store'
     BlueRingAxon = require './protocol'
     assert = require 'assert'
@@ -11,11 +11,12 @@ Public API for a service storing EcmaScript numbers (transmitted as base-36 stri
 
       {Value,host} = options
 
-      CRDT = -> new Counter Value, host
+      CRDT = counter(Value).Counter
+      new_crdt = -> new CRDT host
 
-      store = new BlueRingStore CRDT, host
+      store = new BlueRingStore new_crdt, host
 
-      service = new BlueRingAxon Value, store, options
+      service = new BlueRingAxon CRDT, store, options
       once = (e) -> new Promise (resolve) -> service.ev.once e, resolve
       bound = once 'bind'
       connected = once 'connected'

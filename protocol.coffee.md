@@ -23,7 +23,7 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
     sleep = (timeout) -> new Promise (resolve) -> setTimeout resolve, timeout
 
     class BlueRingAxon
-      constructor: (@Value,store,options) ->
+      constructor: ({@serialize,@deserialize},store,options) ->
         @store = store
 
 Statistics
@@ -115,8 +115,6 @@ Message encoding:
 - `ping()` is encoded as `true`
 - `new-tickets(name,value,array-of-tickets)` is encoded as :1
 
-        deserialize = ([dir,host,value]) => [dir,host,(@Value.deserialize value)]
-
         receive = wrap (msg) =>
           switch
             when msg is PING_PACKET
@@ -139,7 +137,7 @@ Avoid processing expired messages
 
               return if msg.e < Date.now()
 
-              changes = msg.c.map deserialize
+              changes = msg.c.map @deserialize
 
               # console.log 'received', @host, name, msg.e, changes, msg.R
 
@@ -222,12 +220,10 @@ Rate-limit to 1000 per second.
       send_data: ({name,expire,changes,source},route,socket) ->
         # console.log 'send_data', @host, name, expire, changes, source, route
 
-        serialize = ([dir,host,value]) => [dir,host,(@Value.serialize value)]
-
         msg =
           n: name
           e: expire
-          c: changes.map serialize
+          c: changes.map @serialize
           s: source
           R: [@host,route...]
         @send msg, socket

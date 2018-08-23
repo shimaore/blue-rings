@@ -13,9 +13,9 @@
       return
 
     class BlueRingStore
-      constructor: (@CRDT,@host) ->
+      constructor: (@new_crdt,@host) ->
         @store = new Map()
-        @__collector = setInterval collect, 3600*1000, @store
+        @__collector = setInterval collect.bind(this), 3600*1000, @store
 
       destructor: ->
         clearInterval @__collector
@@ -53,7 +53,7 @@ Private operations
             L.set EXPIRE, expire if expire > L.get EXPIRE
         else
           L = new Map()
-          L.set VALUE, @CRDT()
+          L.set VALUE, @new_crdt()
           if expire?
             L.set EXPIRE, expire
             @store.set name, L

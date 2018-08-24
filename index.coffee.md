@@ -21,6 +21,7 @@ Public API for a service storing EcmaScript counters and text.
       class Mux
 
         type: (type) ->
+          return if @__type?
           @__type = type
           switch type
             when COUNTER
@@ -51,7 +52,7 @@ Public API for a service storing EcmaScript counters and text.
         value: -> @__value.value()
 
         merge: ([type,rest...]) ->
-          @type type if not @__type
+          @type type
           msg = @__value.merge rest
           msg[1].unshift type
           msg

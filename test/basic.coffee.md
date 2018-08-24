@@ -110,6 +110,73 @@
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 22
 
+          it 'should accumulate values across two servers (with setup in the middle)', ->
+            port1 = port++
+            port2 = port++
+            m1 = M
+              host: 'α'
+              pub: tcp port1
+              subscribe_to: [
+                tcp port2
+              ]
+              Value: Value
+              connect_delay: 0
+            after -> m1.end()
+
+            m2 = M
+              host: 'β'
+              pub: tcp port2
+              subscribe_to: [
+                tcp port1
+              ]
+              Value: Value
+              connect_delay: 0
+            after -> m2.end()
+
+            await Promise.all [m1.bound,m2.bound,m1.connected,m2.connected]
+
+            NAME = 'ant'
+            m1.setup_counter NAME, Date.now()+8000
+            v= m1.update_counter NAME, Value.accept 3
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 3
+            await sleep 5
+            v = m2.get_counter(NAME)
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 3
+
+            v = m1.update_counter NAME, Value.accept 7
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 10
+            await sleep 5
+            v = m2.get_counter(NAME)
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 10
+
+            m1.setup_counter NAME, Date.now()+8000
+
+            v = m2.update_counter NAME, Value.accept 42
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 52
+            await sleep 5
+            v = m1.get_counter(NAME)
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 52
+            v = m2.get_counter(NAME)
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 52
+
+            v = m2.update_counter NAME, Value.accept -30
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 22
+            await sleep 5
+            v = m1.get_counter(NAME)
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 22
+            v = m2.get_counter(NAME)
+            v.should.have.property 0, true
+            v.should.have.property 1, Value.accept 22
+
 
           it 'should accumulate values across two disconnected servers', ->
             port1 = port++

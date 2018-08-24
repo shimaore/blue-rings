@@ -1,5 +1,5 @@
-Blue Rings: distributed counters
---------------------------------
+Blue Rings: distributed counters and registers
+----------------------------------------------
 
 The goal is to provide distributed counters usable for billing, with:
 - no centralization / single point of failure
@@ -7,6 +7,8 @@ The goal is to provide distributed counters usable for billing, with:
 - able to detect and handle network splits
 
 The underlying protocol is currently Axon, a lightweight, native alternative to ZeroMQ on Node.js.
+
+The module also provides "last-writer wins" text registers.
 
 API
 ---
@@ -42,17 +44,10 @@ The timers `forward_delay` and `connect_delay` are set by default to values adeq
 
 The `Value` option defaults to providing EcmaScript integers as numerical values. Since Node.js 10.7.0 BigInt is also supported natively, and can be activated by using `options.Value = BlueRings.bigint` (the default is the equivalent of `options.Value = BlueRings.integer`).
 
-Here is an example for a service storing Big Rationals (arbitrary precision fractions).
+Here is an example for a service storing Big Integers (arbitrary precision integers).
 
 ```
-    bigRat = require 'big-rational'
-    big_rational_values =
-      deserialize: (t) -> bigRat t
-      serialize: (n) -> n.toString()
-      add: (n1,n2) -> n1.add n2
-      zero: bigRat.zero
-
-    options.Value = big_rational_values
+    options.Value = BlueRings.bigint
     const ring = BlueRings(options);
 ```
 
@@ -66,6 +61,12 @@ Methods
 This implements a counter `name` by adding value `amount`, keeping it until `expire`. Returns a boolean indicating whether the network is coherent (not-split etc.) and a number representing the new value of the counter.
 
 Note that `amount`, `new_value`, `value` are of the type specified by the `Value` option; by default they are native Javascript numbers but might be `BigInt`, `bigRat`, etc.
+
+`ring.setup_text(name,expire) →`
+`ring.update_text (name,text) → [coherent,new_value]`
+`ring.get_text(name) → [coherent,value]`
+
+This implements a Last Writer Wins text register, keeping it until `expire`.
 
 `ring.statistics() -> {recv,recv_tickets,sent,sent_tickets}`
 

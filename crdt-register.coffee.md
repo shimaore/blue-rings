@@ -22,7 +22,7 @@
       all: ->
         [[@v,@t]]
 
-      @deserialize: ([v,t]) -> [v,parseInt(t,36)]
-      @serialize:   ([v,t]) -> [v,t.toString(36)]
+      @deserialize: ([v,t]) -> [v,BigInt(t)]
+      @serialize:   ([v,t]) -> [v,t.toString()]
 
     module.exports = {LWWRegister}

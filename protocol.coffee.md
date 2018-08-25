@@ -9,7 +9,7 @@ There seems to be no SCTP-over-UDP implementations.
 
 For now I'm using Axon but this is highly unsatisfactory since it means we spam the network on every reconnection.
 
-    Axon = require 'axon'
+    Axon = require '@shimaore/axon'
     {EventEmitter} = require 'events'
 
     wrap = (f) ->
@@ -57,6 +57,8 @@ Publisher (sends data out)
         @pub.on 'connect', =>
           @on_connect()
 
+        @pub.on 'error', (error) -> yes
+
         ping = =>
           @send PING_PACKET
 
@@ -102,6 +104,7 @@ Public operations
 
       subscribe_to: (o) ->
         sub = Axon.socket 'sub'
+        sub.on 'error', (error) -> yes
         sub.connect o
 
         ping_received = 0

@@ -11,6 +11,7 @@ Public API for a service storing EcmaScript counters and text.
       options.Value ?= integer_values
 
       {Value,host} = options
+      assert host?, '`host` is required'
 
       {Counter} = counter(Value)
       Register = register.LWWRegister

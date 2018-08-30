@@ -119,7 +119,6 @@ Public API for a service storing EcmaScript counters and text.
 
       update_text = (name,text,expire) ->
         assert 'string' is typeof name, 'update_counter: name is required'
-        assert 'string' is typeof text, 'update_counter: text is required'
 
         service.operation name, expire, 'assign', [text]
 

@@ -1,7 +1,7 @@
     class LWWRegister # state-based, we're doing CvRDT
       constructor: ->
         @v = null
-        @t = 0
+        @t = `0n`
 
       assign: (v) ->
         @v = v

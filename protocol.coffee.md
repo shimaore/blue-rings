@@ -93,8 +93,8 @@ Subscribe to each remote
 
 Public operations
 
-      operation: (name,expire,op,args) ->
-        data = @store.operation name, expire, op, args
+      update: (name,expire,op,args) ->
+        data = @store.update name, expire, op, args
         @send_data data, [], @pub if data?
 
       postpone: (name,delay,f) ->

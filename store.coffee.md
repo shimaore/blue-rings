@@ -21,23 +21,8 @@
         clearInterval @__collector
         return
 
-Public operations
-
       get_expire: (name) ->
         @store.get(name)?.get EXPIRE
-
-      get_value: (name) ->
-        L = @store.get name
-        return null unless L?
-        expire = L.get EXPIRE
-        if not expired expire
-          @store.get name
-          L.get(VALUE).value()
-        else
-          @store.delete name
-          null
-
-Private operations
 
       __retrieve: (name,expire) ->
         L = @store.get(name)
@@ -56,9 +41,22 @@ Private operations
 
         L
 
-Tool
+`query` in Shapiro
 
-      operation: (name,expire,op,args) ->
+      query: (name,op,args...) ->
+        L = @store.get name
+        return null unless L?
+        expire = L.get EXPIRE
+        if not expired expire
+          @store.get name
+          L.get(VALUE)[op]? args...
+        else
+          @store.delete name
+          null
+
+`update` in Shapiro
+
+      update: (name,expire,op,args) ->
 
         L = @__retrieve name, expire
 

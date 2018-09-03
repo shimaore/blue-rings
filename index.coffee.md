@@ -1,5 +1,6 @@
     counter = require './crdt-counter'
     register = require './crdt-register'
+    set = require './crdt-set'
     BlueRingStore = require './store'
     BlueRingAxon = require './protocol'
     assert = require 'assert'
@@ -15,9 +16,11 @@ Public API for a service storing EcmaScript counters and text.
 
       {Counter} = counter(Value)
       Register = register.LWWRegister
+      {TPSet} = set
 
       COUNTER = 'C'
       REGISTER = 'R'
+      SET = 'S'
 
       class Mux
 
@@ -29,6 +32,8 @@ Public API for a service storing EcmaScript counters and text.
               @__value = new Counter host
             when REGISTER
               @__value = new Register()
+            when SET
+              @__value = new TPSet()
             else
               throw new Error "Invalid type #{type}"
 
@@ -36,7 +41,7 @@ Public API for a service storing EcmaScript counters and text.
 
         increment: (args...) ->
           unless @__value?
-            throw new Error 'You must use `setup_counter` before using `update_counter`.'
+            throw new Error 'You must use `setup_counter` before using `increment`.'
           type = @__type
           change = @__value.increment args...
           return null unless change?
@@ -44,13 +49,30 @@ Public API for a service storing EcmaScript counters and text.
 
         assign: (args...) ->
           unless @__value?
-            throw new Error 'You must use `setup_text` before using `update_text`.'
+            throw new Error 'You must use `setup_register` before using `assign`.'
           type = @__type
           change = @__value.assign args...
           return null unless change?
           [type,change...]
 
+        add: (args...) ->
+          unless @__value?
+            throw new Error 'You must use `setup_set` before using `add`.'
+          type = @__type
+          change = @__value.add args...
+          return null unless change?
+          [type,change...]
+
+        remove: (args...) ->
+          unless @__value?
+            throw new Error 'You must use `setup_set` before using `remove`.'
+          type = @__type
+          change = @__value.remove args...
+          return null unless change?
+          [type,change...]
+
         value: -> @__value.value()
+        has: (element) -> @__value.has element
 
         merge: ([type,rest...]) ->
           @type type
@@ -72,6 +94,8 @@ Public API for a service storing EcmaScript counters and text.
               [type].concat Counter.serialize rest
             when REGISTER
               [type].concat Register.serialize rest
+            when SET
+              [type].concat TPSet.serialize rest
             else
               throw new Error "Invalid type #{type}"
 
@@ -81,6 +105,8 @@ Public API for a service storing EcmaScript counters and text.
               [type].concat Counter.deserialize rest
             when REGISTER
               [type].concat Register.deserialize rest
+            when SET
+              [type].concat TPSet.deserialize rest
 
       new_crdt = -> new Mux()
 
@@ -93,36 +119,64 @@ Public API for a service storing EcmaScript counters and text.
 
       get_value = (name) ->
         assert 'string' is typeof name, 'get_counter: name is required'
-        value = store.get_value name
+        value = store.query name, 'value'
         coherent = service.coherent()
         [coherent,value]
 
       setup_counter = (name,expire) ->
         assert 'string' is typeof name, 'setup_counter: name is required'
         assert 'number' is typeof expire, 'setup_counter: expire is required'
-        service.operation name, expire, 'type', COUNTER
+        service.update name, expire, 'type', COUNTER
         return
 
-      update_counter = (name,amount,expire) ->
+      increment = (name,amount,expire) ->
         assert 'string' is typeof name, 'update_counter: name is required'
         assert amount?, 'update_counter: amount is required'
 
-        service.operation name, expire, 'increment', [amount]
+        service.update name, expire, 'increment', [amount]
 
         get_value name
 
-      setup_text = (name,expire) ->
-        assert 'string' is typeof name, 'setup_text: name is required'
-        assert 'number' is typeof expire, 'setup_text: expire is required'
-        service.operation name, expire, 'type', REGISTER
+      setup_register = (name,expire) ->
+        assert 'string' is typeof name, 'setup_register: name is required'
+        assert 'number' is typeof expire, 'setup_register: expire is required'
+        service.update name, expire, 'type', REGISTER
         return
 
-      update_text = (name,text,expire) ->
+      assign = (name,text,expire) ->
         assert 'string' is typeof name, 'update_counter: name is required'
 
-        service.operation name, expire, 'assign', [text]
+        service.update name, expire, 'assign', [text]
 
         get_value name
+
+      setup_set = (name,expire) ->
+        assert 'string' is typeof name, 'setup_set: name is required'
+        assert 'number' is typeof expire, 'setup_set: expire is required'
+        service.update name, expire, 'type', SET
+        return
+
+      add = (name,element,expire) ->
+        assert 'string' is typeof name, 'add: name is required'
+        assert element?, 'add: element is required'
+
+        service.update name, expire, 'add', [element]
+        return
+
+      remove = (name,element,expire) ->
+        assert 'string' is typeof name, 'remove: name is required'
+        assert element?, 'remove: element is required'
+
+        service.update name, expire, 'remove', [element]
+        return
+
+      has = (name,element) ->
+        assert 'string' is typeof name, 'add: name is required'
+        assert element?, 'has: element is required'
+
+        value = store.query name, 'has', element
+        coherent = service.coherent()
+        [coherent,value]
 
       statistics = ->
         recv: service.recv
@@ -139,11 +193,21 @@ Public API for a service storing EcmaScript counters and text.
 
       {
         setup_counter
-        update_counter
+        increment
+        update_counter:increment
+        value:get_value
+        get_value
         get_counter:get_value
-        setup_text
-        update_text
+        setup_text:setup_register
+        setup_register
+        update_text:assign
+        assign
         get_text:get_value
+        setup_set
+        add
+        remove
+        has
+
         bound
         connected
         statistics

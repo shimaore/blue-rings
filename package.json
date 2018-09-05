@@ -1,6 +1,6 @@
 {
   "name": "blue-rings",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Blue Rings: distributed counters",
   "main": "index.js",
   "dependencies": {

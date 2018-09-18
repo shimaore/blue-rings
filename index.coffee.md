@@ -126,7 +126,7 @@ Public API for a service storing EcmaScript counters and text.
       setup_counter = (name,expire) ->
         assert 'string' is typeof name, 'setup_counter: name is required'
         assert 'number' is typeof expire, 'setup_counter: expire is required'
-        service.update name, expire, 'type', COUNTER
+        service.update name, expire, 'type', [COUNTER]
         return
 
       increment = (name,amount,expire) ->
@@ -140,7 +140,7 @@ Public API for a service storing EcmaScript counters and text.
       setup_register = (name,expire) ->
         assert 'string' is typeof name, 'setup_register: name is required'
         assert 'number' is typeof expire, 'setup_register: expire is required'
-        service.update name, expire, 'type', REGISTER
+        service.update name, expire, 'type', [REGISTER]
         return
 
       assign = (name,text,expire) ->
@@ -153,7 +153,7 @@ Public API for a service storing EcmaScript counters and text.
       setup_set = (name,expire) ->
         assert 'string' is typeof name, 'setup_set: name is required'
         assert 'number' is typeof expire, 'setup_set: expire is required'
-        service.update name, expire, 'type', SET
+        service.update name, expire, 'type', [SET]
         return
 
       add = (name,element,expire) ->

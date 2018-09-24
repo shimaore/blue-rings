@@ -10,12 +10,11 @@
     "benchmark": "^2.1.4",
     "chai": "^4.1.2",
     "coffeescript": "^2.3.1",
-    "microtime": "^2.1.8",
     "mocha": "^5.2.0",
     "nyc": "^13.0.1"
   },
   "scripts": {
-    "benchmark": "npm install --only=dev && npm run build && coffee -c benchmark/*.coffee.md && node --expose-gc benchmark/unbasic.js && node benchmark/basic.js",
+    "benchmark": "npm install --only=dev && npm run build && coffee -c benchmark/*.coffee.md && node --expose-gc --trace-deopt benchmark/unbasic.js && node benchmark/basic.js",
     "build": "coffee -c *.coffee.md",
     "prepublishOnly": "npm install --only=dev && npm run build",
     "pretest": "npm install --only=dev && npm run build && coffee -c test/*.coffee.md",

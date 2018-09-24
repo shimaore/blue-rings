@@ -2,7 +2,9 @@ A stresser that tries to keep the CPU around 80%.
 
     sleep = (timeout) -> new Promise (resolve) -> setTimeout resolve, timeout
 
-    stresser = (name,fun) ->
+    use_gc = false
+
+    stresser = (name,fun,stats) ->
 
 `fun` is the function under test
 
@@ -14,13 +16,17 @@ Obviously `setTimeout` doesn't provide us with exact clocking, so we're keeping 
       runs = 10
       per_run = 1
 
+      min = null
+      max = null
+      wait = true
+
       run_once = ->
 
         console.log "Going to execute #{runs} runs with #{delay}ms delay between #{per_run} loops…"
 
 Run the garbage collector first, if available.
 
-        if gc?
+        if gc? and use_gc
           gc_start = process.hrtime.bigint()
           gc()
           delta_gc = process.hrtime.bigint() - gc_start
@@ -52,7 +58,15 @@ Collect diff data
         pour_mille = (user+system) / (delta_time/`1000000n`)
         counter = BigInt runs * per_run
 
-        console.log "#{runs} runs with #{delay}ms delay between #{per_run} loops: #{user}µs user, #{system}µs system, #{delta_time/`1000n`}µs real, #{counter} calls → #{pour_mille}‰ CPU, #{(counter*`1000000000n`)/delta_time}/s"
+        per_second = (counter*`1000000000n`)/delta_time
+        if not wait
+          if not min? or min > per_second
+            min = per_second
+          if not max? or max < per_second
+            max = per_second
+
+        console.log "#{runs} runs with #{delay}ms delay between #{per_run} loops: #{user}µs user, #{system}µs system, #{delta_time/`1000n`}µs real, #{counter} calls → #{pour_mille}‰ CPU, #{per_second} updates/s [#{min}-#{max}]"
+        await stats?()
 
         if counter < `1000n`
           if delay > 0
@@ -71,6 +85,7 @@ Collect diff data
           else
             per_run++
         else
+          wait = false
           if per_run > 1
             per_run--
           else
@@ -78,7 +93,8 @@ Collect diff data
 
         delay
 
-      while true
+      count = 0
+      while count++ < 200
         await run_once()
 
     module.exports = stresser

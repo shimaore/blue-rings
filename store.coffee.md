@@ -94,7 +94,7 @@ Message handlers
         changes = value.all()
         {name,expire,changes,source:@host}
 
-      enumerate_local_values: (cb) ->
+      enumerate_local_values: ->
         for [name,L] from @store.entries()
           expire = L.expire
           unless expired expire

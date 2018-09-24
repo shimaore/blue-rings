@@ -56,7 +56,6 @@
               tcp port2
             ]
             Value: Value
-            connect_delay: 0
           after -> m1.end()
 
           m2 = M
@@ -66,7 +65,6 @@
               tcp port1
             ]
             Value: Value
-            connect_delay: 0
           after -> m2.end()
 
           await Promise.all [m1.bound,m2.bound,m1.connected,m2.connected]
@@ -123,7 +121,6 @@
               tcp port2
             ]
             Value: Value
-            connect_delay: 0
           after -> m1.end()
 
           NAME = 'dog'
@@ -146,7 +143,6 @@
               tcp port1
             ]
             Value: Value
-            connect_delay: 0
           after -> m2.end()
 
           m2.setup_text NAME, Date.now()+8000
@@ -188,9 +184,7 @@
               tcp port3
             ]
             Value: Value
-            forward_delay: 2
-            flood_interval: 2500
-            connect_delay: 1
+            ping_interval: 20
           after -> m1.end()
 
           m2 = M
@@ -200,9 +194,7 @@
               tcp port1
             ]
             Value: Value
-            forward_delay: 2
-            flood_interval: 2500
-            connect_delay: 1
+            ping_interval: 20
           after -> m2.end()
 
           m3 = M
@@ -212,9 +204,7 @@
               tcp port2
             ]
             Value: Value
-            forward_delay: 2
-            flood_interval: 2500
-            connect_delay: 1
+            ping_interval: 20
           after -> m3.end()
 
           NAME = 'ant'
@@ -225,7 +215,7 @@
           v = m1.update_text NAME, 'a'
           v.should.have.property 0, true
           v.should.have.property 1, 'a'
-          await sleep 15
+          await sleep 70
           v = m2.get_text(NAME)
           v.should.have.property 0, true
           v.should.have.property 1, 'a'
@@ -236,7 +226,7 @@
           v = m1.update_text NAME, 'b'
           v.should.have.property 0, true
           v.should.have.property 1, 'b'
-          await sleep 15
+          await sleep 70
           v = m2.get_text(NAME)
           v.should.have.property 0, true
           v.should.have.property 1, 'b'
@@ -247,7 +237,7 @@
           v = m2.update_text NAME, 'c'
           v.should.have.property 0, true
           v.should.have.property 1, 'c'
-          await sleep 15
+          await sleep 70
           v = m1.get_text(NAME)
           v.should.have.property 0, true
           v.should.have.property 1, 'c'
@@ -258,7 +248,7 @@
           v = m3.update_text NAME, 'd'
           v.should.have.property 0, true
           v.should.have.property 1, 'd'
-          await sleep 15
+          await sleep 70
           v = m1.get_text(NAME)
           v.should.have.property 0, true
           v.should.have.property 1, 'd'
@@ -284,7 +274,6 @@
               tcp port3
             ]
             Value: Value
-            connect_delay: 1
           after -> m1.end()
 
           NAME = 'dog'
@@ -309,7 +298,6 @@
               tcp port3
             ]
             Value: Value
-            connect_delay: 1
           after -> m2.end()
 
           m2.setup_text NAME, Date.now()+8000
@@ -358,7 +346,6 @@
               tcp port2
             ]
             Value: Value
-            connect_delay: 1
           after -> m3.end()
 
           m3.setup_text NAME, Date.now()+8000
@@ -408,7 +395,7 @@
 
           console.timeEnd 'establish connections'
 
-          await sleep options.connect_delay *2
+          await sleep (options.ping_interval ? 150)*2
 
           sum = 0
 
@@ -457,55 +444,44 @@ Note: on my machine a lot of these tests only work because we complete a `flood`
 
         it 'should share a whole bunch of values across a whole bunch of servers (full-mesh)', ->
           @timeout 15000
-          load 1000, ((l,i1,i2) -> i2 isnt i1),
-            forward_delay: 50, flood_interval: 2500, connect_delay: 500
+          load 1000, ((l,i1,i2) -> i2 isnt i1)
 
         it 'should share a whole bunch of values across a whole bunch of servers (95% full-mesh)', ->
           @timeout 15000
-          load 7000, ((l,i1,i2) -> i2 isnt i1 and Math.random() < 0.95),
-            forward_delay: 5, flood_interval: 2500, connect_delay: 500
+          load 7000, ((l,i1,i2) -> i2 isnt i1 and Math.random() < 0.95)
 
         it 'should share a whole bunch of values across a whole bunch of servers (star)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2) -> if i1 is 0 then i2 isnt 0 else i2 is 0),
-            forward_delay: 3, flood_interval: 2500, connect_delay: 500
+          load 5000, ((l,i1,i2) -> if i1 is 0 then i2 isnt 0 else i2 is 0)
 
         it 'should share a whole bunch of values across a whole bunch of servers (dual star)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2) -> (if i1 is 0 then i2 isnt 0 else i2 is 0) or (if i1 is 1 then i2 isnt 1 else i2 is 1)),
-            forward_delay: 2, flood_interval: 2500, connect_delay: 500
+          load 5000, ((l,i1,i2) -> (if i1 is 0 then i2 isnt 0 else i2 is 0) or (if i1 is 1 then i2 isnt 1 else i2 is 1))
 
         it 'should share a whole bunch of values across a whole bunch of servers (triple star)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2) -> (if i1 is 0 then i2 isnt 0 else i2 is 0) or (if i1 is 1 then i2 isnt 1 else i2 is 1) or (if i1 is 7 then i2 isnt 7 else i2 is 7)),
-            forward_delay: 2, flood_interval: 2500, connect_delay: 500
+          load 5000, ((l,i1,i2) -> (if i1 is 0 then i2 isnt 0 else i2 is 0) or (if i1 is 1 then i2 isnt 1 else i2 is 1) or (if i1 is 7 then i2 isnt 7 else i2 is 7))
 
         it 'should share a whole bunch of values across a whole bunch of servers (ring)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2) -> i2 is (i1+1)%l),
-            forward_delay: 1, flood_interval: 2500, connect_delay: 50
+          load 5000, ((l,i1,i2) -> i2 is (i1+1)%l)
 
         it 'should share a whole bunch of values across a whole bunch of servers (counter-rotating rings)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2) -> i2 is (i1+1)%l or i2 is (i1-1)%l),
-            forward_delay: 1, flood_interval: 2500, connect_delay: 50
+          load 5000, ((l,i1,i2) -> i2 is (i1+1)%l or i2 is (i1-1)%l)
 
         it 'should share a whole bunch of values across a whole bunch of servers (counter-rotating rings plus one ring)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2) -> i2 is (i1+1)%l or i2 is (i1-1)%l or i2 is (i1+7)%l or i2 is (i1-7)%l),
-            forward_delay: 1, flood_interval: 2500, connect_delay: 50
+          load 5000, ((l,i1,i2) -> i2 is (i1+1)%l or i2 is (i1-1)%l or i2 is (i1+7)%l or i2 is (i1-7)%l)
 
         it 'should share a whole bunch of values across a whole bunch of servers (sparse counter-rotating rings)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2) -> i2 is (i1+1)%l or i2 is (i1-7)%l),
-            forward_delay: 1, flood_interval: 2500, connect_delay: 50
+          load 5000, ((l,i1,i2) -> i2 is (i1+1)%l or i2 is (i1-7)%l)
 
         it.skip 'should share a whole bunch of values across a whole bunch of servers (half-mesh)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2) -> i2 < i1),
-            forward_delay: 1, flood_interval: 2500, connect_delay: 50
+          load 5000, ((l,i1,i2) -> i2 < i1)
 
         it 'should share a whole bunch of values across a whole bunch of servers (95% connect, including self)', ->
           @timeout 40000
-          load 5000, ((l,i1,i2,p1,p2) -> Math.random() < 0.95),
-            forward_delay: 1, flood_interval: 2500, connect_delay: 50
+          load 5000, ((l,i1,i2,p1,p2) -> Math.random() < 0.95)

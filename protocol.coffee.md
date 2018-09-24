@@ -1,5 +1,4 @@
     DEFAULT_PORT = 4000
-    PING_INTERVAL = 150
     PING_PACKET = ''
 
 From a protocol perspective, this should use SCTP as the underlying protocol.
@@ -11,16 +10,6 @@ For now I'm using Axon but this is highly unsatisfactory since it means we spam 
 
     Axon = require '@shimaore/axon'
     {EventEmitter} = require 'events'
-
-    wrap = (f) ->
-      self = this
-      (args...) ->
-        try
-          f.apply(self,args)
-        catch error
-          console.error error
-
-    sleep = (timeout) -> new Promise (resolve) -> setTimeout resolve, timeout
 
     class BlueRingAxon
       constructor: ({@serialize,@deserialize},store,options) ->
@@ -38,14 +27,8 @@ Options
         {
           @host
           subscribe_to
-          @forward_delay =     97
-          @connect_delay =   1511
-          @flood_interval = 59141
+          @ping_interval = 137
         } = options
-
-Map of name-to-timer to throttle sending messages out (used to implement the delays)
-
-        @__sendall = new Map()
 
         @ev = new EventEmitter
 
@@ -54,20 +37,26 @@ Publisher (sends data out)
         @pub = Axon.socket 'pub'
         @pub.once 'bind', =>
           @ev.emit 'bind'
-        @pub.on 'connect', =>
-          @on_connect()
 
         @pub.on 'error', (error) -> yes
 
+        stream = @enumerate()
+
+        @queue = new Map()
+
         ping = =>
           @send PING_PACKET
-
-        flood = =>
-          @on_connect()
+          @queue.forEach (msg,name) =>
+            @send_data msg
+            @queue.delete name
+          max = 10
+          while max-- > 0
+            {value,done} = stream.next()
+            @send_data value if value? unless done
+          return
 
         @pub.bind options.pub ? DEFAULT_PORT
-        @timer = setInterval ping, PING_INTERVAL
-        @flood = setInterval flood, @flood_interval unless @flood_interval < PING_INTERVAL or @flood_interval is Infinity
+        @timer = setInterval ping, @ping_interval
 
 Subscribers (receive data)
 
@@ -88,19 +77,15 @@ Subscribe to each remote
         @close()
         @ev.removeAllListeners()
         clearInterval @timer
-        clearInterval @flood
         return
 
 Public operations
 
       update: (name,expire,op,args) ->
         data = @store.update name, expire, op, args
-        @send_data data, [], @pub if data?
-
-      postpone: (name,delay,f) ->
-        if @__sendall.has name
-          clearTimeout @__sendall.get name
-        @__sendall.set name, setTimeout f, delay
+        # console.log 'update', data
+        @send_data @packet data if data?
+        return
 
       subscribe_to: (o) ->
         sub = Axon.socket 'sub'
@@ -114,7 +99,7 @@ Message encoding:
 - `ping()` is encoded as `true`
 - `new-tickets(name,value,array-of-tickets)` is encoded as :1
 
-        receive = wrap (msg) =>
+        receive = (msg) =>
           switch
             when msg is PING_PACKET
               ping_received++
@@ -145,8 +130,10 @@ The original code called for only forwarding the original message, updated with 
 However this is not very reliable because things are lossy. It's better to send the entire set every time we get an update, which gives a chance to server which are behind to catch up.
 
               res = @store.on_send name, msg.e, changes, sub
-              @postpone name, @forward_delay, =>
-                @send_data res, msg.R, null
+
+              process.nextTick =>
+                # console.log 'forward'
+                @queue.set name, @packet res, msg.R
 
           return
 
@@ -162,7 +149,6 @@ However this is not very reliable because things are lossy. It's better to send 
             # console.log 'all-connected', @host if @coherent()
             @ev.emit 'connected' if @coherent()
 
-            @on_connect sub
           else
             return if not connected
 
@@ -173,9 +159,12 @@ However this is not very reliable because things are lossy. It's better to send 
             @ev.emit 'disconnected'
           return
 
-        sub.on 'message', receive
-        sub.on 'connect', => @on_connect()
-        timer = setInterval monitor, PING_INTERVAL*2.3
+        sub.on 'message', (msg) ->
+          try
+            receive msg
+          catch error
+            console.log error
+        timer = setInterval monitor, @ping_interval*2.3
 
         @subs.set o,
           sock: sub
@@ -193,7 +182,7 @@ However this is not very reliable because things are lossy. It's better to send 
       close: ->
         clearInterval @timer
         @pub.close()
-        @pub.server.unref() # hack, why is this require?
+        @pub.server.unref() # hack, why is this required?
         @subs.forEach ({sock,timer}) ->
           sock.close()
           clearInterval timer
@@ -201,34 +190,38 @@ However this is not very reliable because things are lossy. It's better to send 
 
 Private
 
-      on_connect: (sub) ->
-        @store.enumerate_local_values (res) =>
-          {name} = res
-          @postpone name, @connect_delay, =>
-            @send_data res, [], sub
+      enumerate: ->
+        block_size = 32
+        while true
+          found = false
+          for {name,expire,changes,source} from @store.enumerate_local_values()
+            b = 0
+            while b < changes.length
+              bb = b+block_size
+              res = {name,expire,changes:changes[b...bb],source}
+              yield @packet res
+              found = true
+              b = bb
 
-Rate-limit to 1000 per second.
+Avoid an infinite loop when we don't have any data yet.
 
-          await sleep 1
-          return
+          yield null if not found
         return
 
-      send: (msg,socket) ->
+      send: (msg,socket=null) ->
+        # console.log 'send',msg
         @pub.send msg
 
-      send_data: ({name,expire,changes,source},route,socket) ->
-        # console.log 'send_data', @host, name, expire, changes, source, route
-
-        msg =
-          n: name
-          e: expire
-          c: changes.map @serialize
-          s: source
-          R: [@host,route...]
-        @send msg, socket
-
+      send_data: (msg) ->
+        @send msg
         @sent++
-        @sent_changes += BigInt changes.length
-        return
+        @sent_changes += BigInt msg.c.length
+
+      packet: ({name,expire,changes,source},route = []) ->
+        n: name
+        e: expire
+        c: changes.map @serialize
+        s: source
+        R: [@host,route...]
 
     module.exports = BlueRingAxon

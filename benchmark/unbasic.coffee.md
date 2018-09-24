@@ -23,19 +23,23 @@
           host: 'α'
           pub: tcp ports[i]
           subscribe_to: list.filter(different(i)).map (j) -> tcp ports[j]
-          connect_delay: 0
 
       await Promise.all m.map bound
       await Promise.all m.map connected
       console.log "Bench #{N} setup complete"
 
-      NAME = 'foo'
-      await unload 'add', ->
-        m[0].setup_set NAME, Date.now()+8000
-        await m[0].add NAME, 'c'+Math.random()
+      last_stats = list.map (i) -> m[i].statistics()
+      stats = ->
+        list.forEach (i) ->
+          current_stats = m[i].statistics()
+          console.log "-- recv: #{current_stats.recv-last_stats[i].recv}, recv_changes: #{current_stats.recv_changes-last_stats[i].recv_changes}"
+          last_stats[i] = current_stats
 
-      await unload 'has', ->
-        await m[1].has NAME, 'c'
+      await unload 'add', ->
+        name = "q#{Math.floor 500 * Math.random()}"
+        m[0].setup_set name, Date.now()+8000
+        await m[0].add name, 'c'+Math.random()
+      , stats
 
       m.forEach (mm) -> mm.end()
       return

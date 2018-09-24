@@ -1,13 +1,18 @@
-    EXPIRE  = 'E'
-    VALUE   = 'V'
-
     nextTick = -> new Promise process.nextTick
 
     expired = (expire) -> expire < Date.now()
 
+    class BlueRingNode
+      constructor: (@value,@expire) ->
+        @expire ?= 0
+
+      set_expire: (expire) ->
+        return unless expire?
+        @expire = expire if expire > @expire
+
     collect = (store) ->
       for [name,L] from store.entries()
-        expire = L.get EXPIRE
+        expire = L.expire
         @store.delete name if expired expire
         await nextTick()
       return
@@ -22,22 +27,17 @@
         return
 
       get_expire: (name) ->
-        @store.get(name)?.get EXPIRE
+        @store.get(name)?.expire
 
       __retrieve: (name,expire) ->
         L = @store.get(name)
 
         if L?
-          if expire?
-            L.set EXPIRE, expire if expire > L.get EXPIRE
+          L.set_expire expire
         else
-          L = new Map()
-          L.set VALUE, @new_crdt()
+          L = new BlueRingNode @new_crdt(), expire
           if expire?
-            L.set EXPIRE, expire
             @store.set name, L
-          else
-            L.set EXPIRE, 0
 
         L
 
@@ -46,10 +46,10 @@
       query: (name,op,args...) ->
         L = @store.get name
         return null unless L?
-        expire = L.get EXPIRE
+        expire = L.expire
         if not expired expire
           @store.get name
-          L.get(VALUE)[op]? args...
+          L.value[op]? args...
         else
           @store.delete name
           null
@@ -60,9 +60,9 @@
 
         L = @__retrieve name, expire
 
-        change = L.get(VALUE)[op]? args...
+        change = L.value[op]? args...
 
-        expire_now = L.get EXPIRE
+        expire_now = L.expire
         return if expire is expire_now and not change?
         if change?
           {name,expire:expire_now,changes:[change],source:@host}
@@ -73,7 +73,7 @@ Message handlers
 
       on_new_changes: (name,expire,changes,source,socket) ->
         L = @__retrieve name, expire
-        value = L.get VALUE
+        value = L.value
         changed = false
         forward = changes
           .map (msg) =>
@@ -81,25 +81,25 @@ Message handlers
             changed = true if modified
             msg
 
-        expire_now = L.get EXPIRE
+        expire_now = L.expire
         {name,expire:expire_now,changes:forward,changed,source:@host}
 
       on_send: (name,expire,changes,socket) ->
         L = @__retrieve name, expire
-        value = L.get VALUE
+        value = L.value
         changes.forEach (msg) ->
           value.merge msg
 
-        expire = L.get EXPIRE
+        expire = L.expire
         changes = value.all()
         {name,expire,changes,source:@host}
 
       enumerate_local_values: (cb) ->
         for [name,L] from @store.entries()
-          expire = L.get EXPIRE
+          expire = L.expire
           unless expired expire
-            changes = L.get(VALUE).all()
-            await cb {name,expire,changes,source:@host}
+            changes = L.value.all()
+            yield {name,expire,changes,source:@host}
         return
 
     module.exports = BlueRingStore

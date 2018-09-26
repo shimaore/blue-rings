@@ -29,64 +29,76 @@ Public API for a service storing EcmaScript counters and text.
           @__type = type
           switch type
             when COUNTER
-              @__value = new Counter host
+              @__cnt = new Counter host
             when REGISTER
-              @__value = new Register()
+              @__reg = new Register()
             when SET
-              @__value = new TPSet()
+              @__set = new TPSet()
             else
               throw new Error "Invalid type #{type}"
 
           null
 
         increment: (args...) ->
-          unless @__value?
+          unless @__type is COUNTER and @__cnt?
             throw new Error 'You must use `setup_counter` before using `increment`.'
-          type = @__type
-          change = @__value.increment args...
+          change = @__cnt.increment args...
           return null unless change?
-          [type,change...]
+          [COUNTER,change...]
 
         assign: (args...) ->
-          unless @__value?
+          unless @__type is REGISTER and @__reg?
             throw new Error 'You must use `setup_register` before using `assign`.'
-          type = @__type
-          change = @__value.assign args...
+          change = @__reg.assign args...
           return null unless change?
-          [type,change...]
+          [REGISTER,change...]
 
         add: (args...) ->
-          unless @__value?
+          unless @__type is SET and @__set?
             throw new Error 'You must use `setup_set` before using `add`.'
-          type = @__type
-          change = @__value.add args...
+          change = @__set.add args...
           return null unless change?
-          [type,change...]
+          [SET,change...]
 
         remove: (args...) ->
-          unless @__value?
+          unless @__type is SET and @__set?
             throw new Error 'You must use `setup_set` before using `remove`.'
-          type = @__type
-          change = @__value.remove args...
+          change = @__set.remove args...
           return null unless change?
-          [type,change...]
+          [SET,change...]
 
-        value: -> @__value.value()
-        has: (element) -> @__value.has element
+        value: ->
+          switch @__type
+            when COUNTER
+              @__cnt.value()
+            when REGISTER
+              @__reg.value()
+            when SET
+              @__set.value()
+
+        has: (element) -> @__set.has element
 
         merge: ([type,rest...]) ->
           @type type
-          msg = @__value.merge rest
+          switch type
+            when COUNTER
+              msg = @__cnt.merge rest
+            when REGISTER
+              msg = @__reg.merge rest
+            when SET
+              msg = @__set.merge rest
           msg[1].unshift type
           msg
 
         all: ->
-          return [] unless @__value?
           type = @__type
-          @__value
-          .all()
-          .map (rest) ->
-            [type,rest...]
+          switch type
+            when COUNTER
+              @__cnt?.all().map((rest) -> [type,rest...]) ? []
+            when REGISTER
+              @__reg?.all().map((rest) -> [type,rest...]) ? []
+            when SET
+              @__set?.all().map((rest) -> [type,rest...]) ? []
 
         @serialize: ([type,rest...]) ->
           switch type

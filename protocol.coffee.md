@@ -8,6 +8,8 @@ There seems to be no SCTP-over-UDP implementations.
 
 For now I'm using Axon but this is highly unsatisfactory since it means we spam the network on every reconnection.
 
+    nextTick = -> new Promise (resolve) -> process.nextTick resolve
+
     Axon = require '@shimaore/axon'
     {EventEmitter} = require 'events'
 
@@ -45,14 +47,29 @@ Publisher (sends data out)
         @queue = new Map()
 
         ping = =>
-          @send PING_PACKET
-          @queue.forEach (msg,name) =>
-            @send_data msg
-            @queue.delete name
           max = 10
           while max-- > 0
             {value,done} = stream.next()
-            @send_data value if value? unless done
+            if not done and value? and not @queue.has value.name
+              @queue.set value.name, @packet value
+
+          if @queue.size is 0
+            @send PING_PACKET
+            return
+
+          content = []
+          for [name,msg] from @queue.entries()
+            content.push msg
+            @queue.delete name
+            @sent_changes += BigInt msg.c.length
+
+            if content.length > 10
+              @send_data content
+              content = []
+              await nextTick()
+
+          if content.length > 0
+            @send_data content
           return
 
         @pub.bind options.pub ? DEFAULT_PORT
@@ -83,8 +100,10 @@ Public operations
 
       update: (name,expire,op,args) ->
         data = @store.update name, expire, op, args
-        # console.log 'update', data
-        @send_data @packet data if data?
+        return unless data?
+        process.nextTick =>
+          @send_data @packet data
+          @sent_changes += BigInt data.changes.length
         return
 
       subscribe_to: (o) ->
@@ -100,13 +119,17 @@ Message encoding:
 - `new-tickets(name,value,array-of-tickets)` is encoded as :1
 
         receive = (msg) =>
+          # console.log 'receive', @host, msg
+          ping_received++
           switch
-            when msg is PING_PACKET
-              ping_received++
+            when Array.isArray msg
+              msg.forEach receive_change
 
             when typeof msg is 'object'
-              # console.log 'receive', @host, msg
               @recv++
+              receive_change msg
+
+        receive_change = (msg) =>
               @recv_changes += BigInt msg.c.length
 
               name = msg.n
@@ -133,9 +156,10 @@ However this is not very reliable because things are lossy. It's better to send 
                 res = @store.on_send name, msg.e, changes, sub
                 @queue.set name, @packet res, msg.R
 
-          return
+              return
 
         monitor = =>
+          # console.log 'monitor', ping_received
           if ping_received > 0
             ping_received = 0 # Reset counter
             return if connected
@@ -161,7 +185,7 @@ However this is not very reliable because things are lossy. It's better to send 
           try
             receive msg
           catch error
-            console.log error
+            console.error error
         timer = setInterval monitor, @ping_interval*2.3
 
         @subs.set o,
@@ -197,7 +221,7 @@ Private
             while b < changes.length
               bb = b+block_size
               res = {name,expire,changes:changes[b...bb],source}
-              yield @packet res
+              yield res
               found = true
               b = bb
 
@@ -213,7 +237,7 @@ Avoid an infinite loop when we don't have any data yet.
       send_data: (msg) ->
         @send msg
         @sent++
-        @sent_changes += BigInt msg.c.length
+        return
 
       packet: ({name,expire,changes,source},route = []) ->
         n: name

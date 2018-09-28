@@ -18,9 +18,9 @@ Public API for a service storing EcmaScript counters and text.
       Register = register.LWWRegister
       {TPSet} = set
 
-      COUNTER = 'C'
-      REGISTER = 'R'
-      SET = 'S'
+      COUNTER = 1
+      REGISTER = 2
+      SET = 3
 
       class Mux
 
@@ -76,9 +76,8 @@ Public API for a service storing EcmaScript counters and text.
 
         merge: ([type,rest...]) ->
           @type type
-          msg = @__value.merge rest
-          msg[1].unshift type
-          msg
+          @__value.merge rest
+          return
 
         all: ->
           return [] unless @__value?
@@ -91,22 +90,22 @@ Public API for a service storing EcmaScript counters and text.
         @serialize: ([type,rest...]) ->
           switch type
             when COUNTER
-              [type].concat Counter.serialize rest
+              [type,(Counter.serialize rest)...]
             when REGISTER
-              [type].concat Register.serialize rest
+              [type,(Register.serialize rest)...]
             when SET
-              [type].concat TPSet.serialize rest
+              [type,(TPSet.serialize rest)...]
             else
               throw new Error "Invalid type #{type}"
 
         @deserialize: ([type,rest...]) ->
           switch type
             when COUNTER
-              [type].concat Counter.deserialize rest
+              [type,(Counter.deserialize rest)...]
             when REGISTER
-              [type].concat Register.deserialize rest
+              [type,(Register.deserialize rest)...]
             when SET
-              [type].concat TPSet.deserialize rest
+              [type,(TPSet.deserialize rest)...]
 
       new_crdt = -> new Mux()
 
@@ -218,8 +217,10 @@ Public API for a service storing EcmaScript counters and text.
 `values` interface for integers
 
     integer_values =
-      deserialize: (t) -> parseInt t, 36  # protocol
-      serialize: (n) -> n.toString 36     # protocol
+      deserialize: (t) -> t
+      serialize: (n) -> n
+      # deserialize: (t) -> parseInt t, 36  # protocol
+      # serialize: (n) -> n.toString 36     # protocol
       add: (n1,n2) -> n1+n2
       equals: (n1,n2) -> n1 is n2
       abs: (n) -> if n < 0 then -n else n

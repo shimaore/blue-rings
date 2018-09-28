@@ -129,10 +129,8 @@ The original code called for only forwarding the original message, updated with 
 
 However this is not very reliable because things are lossy. It's better to send the entire set every time we get an update, which gives a chance to server which are behind to catch up.
 
-              res = @store.on_send name, msg.e, changes, sub
-
               process.nextTick =>
-                # console.log 'forward'
+                res = @store.on_send name, msg.e, changes, sub
                 @queue.set name, @packet res, msg.R
 
           return

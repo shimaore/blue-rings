@@ -26,12 +26,18 @@ This is called `increment` in [Shapiro,Preguiça,Baquero,Zawirski(2011)] Specifi
 
 This is called `merge` in the same paper, with X = existing local payload, Y = incremental payload, Z = new local payload.
 
-        merge: ([source,increment]) ->
+        changed_merge: ([source,increment]) ->
           previous = (@increments.get source) ? Value.zero
           new_increment = Value.max previous, increment
           @increments.set source, new_increment
           changed = not Value.equals increment, new_increment
           [ changed, [ source, new_increment ] ]
+
+        fast_merge: (source,increment) ->
+          previous = (@increments.get source) ? Value.zero
+          new_increment = Value.max previous, increment
+          @increments.set source, new_increment
+          return
 
 This is called `query` in the same paper.
 
@@ -50,8 +56,8 @@ This is called `query` in the same paper.
 PN-Counter
 ==========
 
-      PLUS  = '+'
-      MINUS = '-'
+      PLUS  = 1
+      MINUS = 2
 
       class Counter
 
@@ -73,13 +79,12 @@ The INRIA paper offers `increment` and `decrement` (Specification 7), we combine
               null
 
         merge: ([dir,source,increment]) ->
-          msg = switch dir
+          switch dir
             when PLUS
-              @pluses.merge [source, increment]
+              @pluses.fast_merge source, increment
             when MINUS
-              @minuses.merge [source, increment]
-          msg[1].unshift dir
-          msg
+              @minuses.fast_merge source, increment
+          return
 
         value: ->
           Value.subtract @pluses.value(), @minuses.value()

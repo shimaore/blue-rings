@@ -8,13 +8,19 @@
         @t = process.hrtime.bigint()
         [@v,@t]
 
-      merge: ([v,t]) ->
+      changed_merge: ([v,t]) ->
         changed = false
         if @t < t
           @v = v
           @t = t
           changed = true
         [ changed, [ @v, @t ] ]
+
+      merge: ([v,t]) ->
+        if @t < t
+          @v = v
+          @t = t
+        return
 
       value: ->
         @v

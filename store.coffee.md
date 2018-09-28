@@ -71,24 +71,12 @@
 
 Message handlers
 
-      on_new_changes: (name,expire,changes,source,socket) ->
-        L = @__retrieve name, expire
-        value = L.value
-        changed = false
-        forward = changes
-          .map (msg) =>
-            [ modified, msg ] = value.merge msg
-            changed = true if modified
-            msg
-
-        expire_now = L.expire
-        {name,expire:expire_now,changes:forward,changed,source:@host}
-
       on_send: (name,expire,changes,socket) ->
         L = @__retrieve name, expire
         value = L.value
         changes.forEach (msg) ->
           value.merge msg
+          return
 
         expire = L.expire
         changes = value.all()

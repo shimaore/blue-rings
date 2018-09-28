@@ -22,12 +22,16 @@ Page 22 (Specification 11) of Shapiro, Preguiça, Baquero, Zawirski
       value: ->
         Array.from @elements.keys()
 
-      merge: ([element]) ->
+      changed_merge: ([element]) ->
         changed = false
         unless @elements.has element
           @elements.add element
           changed = true
         [ changed, [element] ]
+
+      fast_merge: (element) ->
+        @elements.add element
+        return
 
       all: ->
         @elements.keys()
@@ -41,8 +45,8 @@ Page 22 (Specification 11) of Shapiro, Preguiça, Baquero, Zawirski
 Two-Phase Set: elements might be added and removed, but once removed never put back in again.
 (Specification 12)
 
-    ADDED = '+'
-    REMOVED = '-'
+    ADDED = 1
+    REMOVED = 2
 
     class TPSet
 
@@ -52,14 +56,14 @@ Two-Phase Set: elements might be added and removed, but once removed never put b
 
       add: (element) ->
         change = @added.add element
-        change?.unshift ADDED
-        change
+        return null unless change?
+        [ADDED,change...]
 
       remove: (element) ->
         return null unless @has element # `pre lookup(e)` in Shapiro
         change = @removed.add element
-        change?.unshift REMOVED
-        change
+        return null unless change?
+        [REMOVED,change...]
 
 `lookup` in Shapiro
 
@@ -71,13 +75,12 @@ Two-Phase Set: elements might be added and removed, but once removed never put b
         .filter (e) => not @removed.has e
 
       merge: ([dir,element]) ->
-        msg = switch dir
+        switch dir
           when ADDED
-            @added.merge [element]
+            @added.fast_merge element
           when REMOVED
-            @removed.merge [element]
-        msg[1].unshift dir
-        msg
+            @removed.fast_merge element
+        return
 
       all: ->
         all = []

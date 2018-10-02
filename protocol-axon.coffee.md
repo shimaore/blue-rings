@@ -1,5 +1,5 @@
     DEFAULT_PORT = 4000
-    PING_PACKET = Buffer.from '[]'
+    PING_PACKET = ''
 
 From a protocol perspective, this should use SCTP as the underlying protocol.
 However SCTP is not in libuv, and therefor not in Node.js.
@@ -8,17 +8,10 @@ There seems to be no SCTP-over-UDP implementations.
 
     nextTick = -> new Promise (resolve) -> process.nextTick resolve
 
-    dgram = require 'dgram'
+    Axon = require '@shimaore/axon'
     {EventEmitter} = require 'events'
 
-    url = require 'url'
-    parse = (t) ->
-      addr = url.parse t
-      addr.protocol ?= 'udp4'
-      addr.protocol = addr.protocol.replace /:$/, ''
-      addr
-
-    class BlueRingPunt
+    class BlueRingAxon
       constructor: ({@serialize,@deserialize},store,options) ->
         @store = store
 
@@ -41,11 +34,12 @@ Options
 
 Publisher (sends data out)
 
-        addr = parse options.pub ? 'udp4://127.0.0.1:4000'
-        @pub = dgram.createSocket addr.protocol
-        @pub.on 'error', console.error
-        @pub.bind addr.port, addr.hostname, =>
+        @pub = Axon.socket 'pub'
+        @pub.once 'bind', =>
           @ev.emit 'bind'
+
+        @pub.on 'error', (error) -> yes
+        @pub.bind options.pub ? DEFAULT_PORT
 
         stream = @enumerate()
 
@@ -79,15 +73,55 @@ Publisher (sends data out)
 
         @timer = setInterval ping, @ping_interval
 
+Subscribers (receive data)
+
+        @subs = new Map()
+
+Boolean indicating that all subscribers are operational
+
+        @connected = 0
+
+Subscribe to each remote
+
+        subscribe_to?.forEach (o) => @subscribe_to o
+
+        return
+
+      destructor: ->
+        @store.destructor()
+        @close()
+        @ev.removeAllListeners()
+        clearInterval @timer
+        return
+
+Public operations
+
+      update: (name,expire,op,args) ->
+        # console.log 'update', name, expire, op, args
+        data = @store.update name, expire, op, args
+        return unless data?
+        process.nextTick =>
+          @send_data @packet data
+          @sent_changes += BigInt data.changes.length
+        return
+
+      subscribe_to: (o) ->
+        sub = Axon.socket 'sub'
+        sub.on 'error', (error) -> yes
+        sub.connect o
+
+        ping_received = 0
+        connected = false # State Machine
+
 Message encoding:
 - `ping()` is encoded as `true`
 - `new-tickets(name,value,array-of-tickets)` is encoded as :1
 
         receive = (msg) =>
           # console.log 'receive', @host, JSON.stringify msg
+          ping_received++
           switch
             when Array.isArray msg
-              @recv++
               msg.forEach receive_change
 
             when typeof msg is 'object'
@@ -118,7 +152,7 @@ The original code called for only forwarding the original message, updated with 
 However this is not very reliable because things are lossy. It's better to send the entire set every time we get an update, which gives a chance to server which are behind to catch up.
 
               process.nextTick =>
-                res = @store.merge name, msg.e, changes
+                res = @store.merge name, msg.e, changes, sub
                 if res.changed
                   @queue.set name, @packet res
                 else
@@ -127,54 +161,56 @@ However this is not very reliable because things are lossy. It's better to send 
 
               return
 
-        @pub.on 'message', (msg) ->
+        monitor = =>
+          # console.log 'monitor', ping_received
+          if ping_received > 0
+            ping_received = 0 # Reset counter
+            return if connected
+
+            # Transition from not-connected to connected
+            connected = true
+            @connected++
+            # console.log 'connected', @host, o
+            # console.log 'all-connected', @host if @coherent()
+            @ev.emit 'connected' if @coherent()
+
+          else
+            return if not connected
+
+            # Transition from connected to not-connected
+            connected = false
+            @connected--
+            # console.log 'disconnected', @host
+            @ev.emit 'disconnected'
+          return
+
+        sub.on 'message', (msg) ->
           try
-            receive JSON.parse msg
+            receive msg
           catch error
             console.error error
+        timer = setInterval monitor, @ping_interval*2.3
 
-Subscribers (receive data)
-
-        @subs = new Map()
-
-Subscribe to each remote
-
-        subscribe_to?.forEach (o) => @subscribe_to o
-
-        process.nextTick =>
-          @ev.emit 'connected'
-
-        return
-
-      destructor: ->
-        @store.destructor()
-        @pub.close()
-        @ev.removeAllListeners()
-        clearInterval @timer
-        return
-
-Public operations
-
-      update: (name,expire,op,args) ->
-        # console.log 'update', name, expire, op, args
-        data = @store.update name, expire, op, args
-        return unless data?
-        process.nextTick =>
-          @send_data @packet data
-          @sent_changes += BigInt data.changes.length
-        return
-
-      subscribe_to: (o) ->
-        sub = parse o
-
-        @subs.set o, sub
+        @subs.set o,
+          sock: sub
+          timer: timer
+          connected: -> connected
 
       coherent: ->
-        true # actually, we have no clue
+        @connected is @subs.size
+
+      connected: ->
+        v = 0
+        v++ for x in @subs when x.connected
+        v
 
       close: ->
         clearInterval @timer
-        @pub.sock.close()
+        @pub.close()
+        @pub.server.unref() # hack, why is this required?
+        @subs.forEach ({sock,timer}) ->
+          sock.close()
+          clearInterval timer
         return
 
 Private
@@ -197,13 +233,12 @@ Avoid an infinite loop when we don't have any data yet.
           yield null if not found
         return
 
-      send: (msg) ->
-        @subs.forEach (sub) =>
-          @pub.send msg, sub.port, sub.hostname
-        return
+      send: (msg,socket=null) ->
+        # console.log 'send',@host,JSON.stringify msg
+        @pub.send msg
 
       send_data: (msg) ->
-        @send Buffer.from JSON.stringify msg
+        @send msg
         @sent++
         return
 
@@ -216,4 +251,4 @@ Avoid an infinite loop when we don't have any data yet.
         s: source
         R: [@host,route...]
 
-    module.exports = BlueRingPunt
+    module.exports = BlueRingAxon

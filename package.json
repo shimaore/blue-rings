@@ -4,7 +4,8 @@
   "description": "Blue Rings: distributed counters",
   "main": "index.js",
   "dependencies": {
-    "@shimaore/axon": "^3.4.5"
+    "@shimaore/axon": "^3.4.5",
+    "@shimaore/punt": "^1.0.0"
   },
   "devDependencies": {
     "benchmark": "^2.1.4",

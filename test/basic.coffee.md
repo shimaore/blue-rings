@@ -11,7 +11,7 @@
       M = blue_rings.run
 
       port = Math.ceil 2000+10000*Math.random()
-      tcp = (p) -> "tcp://127.0.0.1:#{p}"
+      tcp = (p) -> "udp4://127.0.0.1:#{p}"
 
       run_with = (type,Value) ->
         describe "when using #{type}", ->

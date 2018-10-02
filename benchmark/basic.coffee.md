@@ -3,7 +3,7 @@
     BlueRing = require '..'
     M = BlueRing.run
     port = Math.ceil 18000+1000*Math.random()
-    tcp = (p) -> "tcp://127.0.0.1:#{p}"
+    tcp = (p) -> "udp4://127.0.0.1:#{p}"
 
     different = (i) ->
       (j) -> j isnt i

@@ -71,16 +71,17 @@
 
 Message handlers
 
-      on_send: (name,expire,changes,socket) ->
+      merge: (name,expire,changes,socket) ->
         L = @__retrieve name, expire
         value = L.value
+        changed = false
         changes.forEach (msg) ->
-          value.merge msg
+          changed or= value.merge msg
           return
 
         expire = L.expire
         changes = value.all()
-        {name,expire,changes,source:@host}
+        {name,expire,changes,changed,source:@host}
 
       enumerate_local_values: ->
         for [name,L] from @store.entries()

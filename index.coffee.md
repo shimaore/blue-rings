@@ -45,7 +45,7 @@ Public API for a service storing EcmaScript counters and text.
           type = @__type
           change = @__value.increment args...
           return null unless change?
-          [type,change...]
+          [type,change]
 
         assign: (args...) ->
           unless @__value?
@@ -53,7 +53,7 @@ Public API for a service storing EcmaScript counters and text.
           type = @__type
           change = @__value.assign args...
           return null unless change?
-          [type,change...]
+          [type,change]
 
         add: (args...) ->
           unless @__value?
@@ -61,7 +61,7 @@ Public API for a service storing EcmaScript counters and text.
           type = @__type
           change = @__value.add args...
           return null unless change?
-          [type,change...]
+          [type,change]
 
         remove: (args...) ->
           unless @__value?
@@ -69,14 +69,14 @@ Public API for a service storing EcmaScript counters and text.
           type = @__type
           change = @__value.remove args...
           return null unless change?
-          [type,change...]
+          [type,change]
 
         value: -> @__value.value()
         has: (element) -> @__value.has element
 
-        merge: ([type,rest...]) ->
+        merge: ([type,change]) ->
           @type type
-          @__value.merge rest
+          @__value.merge change
           return
 
         all: ->
@@ -84,28 +84,36 @@ Public API for a service storing EcmaScript counters and text.
           type = @__type
           @__value
           .all()
-          .map (rest) ->
-            [type,rest...]
+          .map (change) ->
+            [type,change]
 
-        @serialize: ([type,rest...]) ->
+        @serialize: (a) -> # [type,change]
+          # console.log 'serialize', a
+          type = a[0]
           switch type
             when COUNTER
-              [type,(Counter.serialize rest)...]
+              if Counter.serialize?
+                Counter.serialize a[1]
             when REGISTER
-              [type,(Register.serialize rest)...]
+              Register.serialize a[1]
             when SET
-              [type,(TPSet.serialize rest)...]
+              yes
             else
               throw new Error "Invalid type #{type}"
 
-        @deserialize: ([type,rest...]) ->
+        @deserialize: (a) -> # [type,change]
+          # console.log 'deserialize', a
+          type = a[0]
           switch type
             when COUNTER
-              [type,(Counter.deserialize rest)...]
+              if Counter.deserialize?
+                Counter.deserialize a[1]
             when REGISTER
-              [type,(Register.deserialize rest)...]
+              Register.deserialize a[1]
             when SET
-              [type,(TPSet.deserialize rest)...]
+              yes
+            else
+              throw new Error "Invalid type #{type}"
 
       new_crdt = -> new Mux()
 
@@ -217,10 +225,6 @@ Public API for a service storing EcmaScript counters and text.
 `values` interface for integers
 
     integer_values =
-      deserialize: (t) -> t
-      serialize: (n) -> n
-      # deserialize: (t) -> parseInt t, 36  # protocol
-      # serialize: (n) -> n.toString 36     # protocol
       add: (n1,n2) -> n1+n2
       equals: (n1,n2) -> n1 is n2
       abs: (n) -> if n < 0 then -n else n

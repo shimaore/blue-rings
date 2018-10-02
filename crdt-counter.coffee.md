@@ -26,18 +26,12 @@ This is called `increment` in [Shapiro,Preguiça,Baquero,Zawirski(2011)] Specifi
 
 This is called `merge` in the same paper, with X = existing local payload, Y = incremental payload, Z = new local payload.
 
-        changed_merge: ([source,increment]) ->
+        merge: (source,increment) ->
           previous = (@increments.get source) ? Value.zero
           new_increment = Value.max previous, increment
-          @increments.set source, new_increment
           changed = not Value.equals increment, new_increment
-          [ changed, [ source, new_increment ] ]
-
-        fast_merge: (source,increment) ->
-          previous = (@increments.get source) ? Value.zero
-          new_increment = Value.max previous, increment
           @increments.set source, new_increment
-          return
+          changed
 
 This is called `query` in the same paper.
 
@@ -50,8 +44,11 @@ This is called `query` in the same paper.
         all: ->
           @increments.entries()
 
-        @deserialize: ([host,value]) -> [host,(Value.deserialize value)]
-        @serialize:   ([host,value]) -> [host,(Value.serialize   value)]
+      # [host,value]
+      if Value.deserialize?
+        GrowCounter.deserialize = (a) -> a[1] = Value.deserialize a[1]
+      if Value.serialize?
+        GrowCounter.serialize   = (a) -> a[1] = Value.serialize   a[1]
 
 PN-Counter
 ==========
@@ -79,12 +76,14 @@ The INRIA paper offers `increment` and `decrement` (Specification 7), we combine
               null
 
         merge: ([dir,source,increment]) ->
+          # console.log "PN-Counter #{@me} merge", dir, source, increment
           switch dir
             when PLUS
-              @pluses.fast_merge source, increment
+              @pluses.merge source, increment
             when MINUS
-              @minuses.fast_merge source, increment
-          return
+              @minuses.merge source, increment
+            else
+              false
 
         value: ->
           Value.subtract @pluses.value(), @minuses.value()
@@ -97,7 +96,10 @@ The INRIA paper offers `increment` and `decrement` (Specification 7), we combine
             all.push [MINUS,source,increment]
           all
 
-        @deserialize: ([dir,host,value]) -> [dir,host,(Value.deserialize value)]
-        @serialize:   ([dir,host,value]) -> [dir,host,(Value.serialize   value)]
+      # [dir,host,value]
+      if Value.deserialize?
+        Counter.deserialize = (a) -> a[2] = Value.deserialize a[2]
+      if Value.serialize?
+        Counter.serialize   = (a) -> a[2] = Value.serialize   a[2]
 
       {GrowCounter,Counter}

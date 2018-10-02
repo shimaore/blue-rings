@@ -219,12 +219,14 @@
             await Promise.all [m2.bound,m1.connected,m2.connected]
 
             await sleep 5
+            ### We no longer try to sync "ASAP"
             v = m1.get_counter(NAME)
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 52
             v = m2.get_counter(NAME)
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 52
+            ###
 
             v = m2.update_counter NAME, Value.accept 42
             v.should.have.property 0, true
@@ -375,12 +377,14 @@
             await sleep 850
 
             await sleep 5
+            ### We no longer try to sync "ASAP"
             v = m1.get_counter(NAME)
             v.should.have.property 0, false
             v.should.have.property 1, Value.accept 52
             v = m2.get_counter(NAME)
             v.should.have.property 0, false
             v.should.have.property 1, Value.accept 52
+            ###
 
             v = m2.update_counter NAME, Value.accept 42
             v.should.have.property 0, false
@@ -421,7 +425,7 @@
 
             await Promise.all [m1.connected,m2.connected,m3.bound,m3.connected]
 
-            await sleep 15 # fails with 5ms for BigInt on my laptop
+            await sleep 250
             v = m1.get_counter(NAME)
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 96

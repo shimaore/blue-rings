@@ -13,8 +13,9 @@ Page 22 (Specification 11) of Shapiro, Preguiça, Baquero, Zawirski
         @elements = new Set()
 
       add: (element) ->
+        return null if @elements.has element
         @elements.add element
-        [element]
+        element
 
       has: (element) ->
         @elements.has element
@@ -22,22 +23,12 @@ Page 22 (Specification 11) of Shapiro, Preguiça, Baquero, Zawirski
       value: ->
         Array.from @elements.keys()
 
-      changed_merge: ([element]) ->
-        changed = false
-        unless @elements.has element
-          @elements.add element
-          changed = true
-        [ changed, [element] ]
-
       fast_merge: (element) ->
         @elements.add element
         return
 
       all: ->
         @elements.keys()
-
-      @deserialize: ([element]) -> [element]
-      @serialize:   ([element]) -> [element]
 
 2P-Set
 ======
@@ -57,13 +48,13 @@ Two-Phase Set: elements might be added and removed, but once removed never put b
       add: (element) ->
         change = @added.add element
         return null unless change?
-        [ADDED,change...]
+        [ADDED,change]
 
       remove: (element) ->
         return null unless @has element # `pre lookup(e)` in Shapiro
         change = @removed.add element
         return null unless change?
-        [REMOVED,change...]
+        [REMOVED,change]
 
 `lookup` in Shapiro
 
@@ -77,10 +68,19 @@ Two-Phase Set: elements might be added and removed, but once removed never put b
       merge: ([dir,element]) ->
         switch dir
           when ADDED
-            @added.fast_merge element
+            if @added.has element
+              false
+            else
+              @added.fast_merge element
+              true
           when REMOVED
-            @removed.fast_merge element
-        return
+            if not @has element
+              false
+            else
+              @removed.fast_merge element
+              true
+          else
+            false
 
       all: ->
         all = []
@@ -89,8 +89,5 @@ Two-Phase Set: elements might be added and removed, but once removed never put b
         for element from @removed.all()
           all.push [REMOVED,element]
         all
-
-      @deserialize: ([dir,element]) -> [dir,element]
-      @serialize:   ([dir,element]) -> [dir,element]
 
     module.exports = {GrowSet,TPSet}

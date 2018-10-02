@@ -99,6 +99,7 @@ Subscribe to each remote
 Public operations
 
       update: (name,expire,op,args) ->
+        # console.log 'update', name, expire, op, args
         data = @store.update name, expire, op, args
         return unless data?
         process.nextTick =>
@@ -119,7 +120,7 @@ Message encoding:
 - `new-tickets(name,value,array-of-tickets)` is encoded as :1
 
         receive = (msg) =>
-          # console.log 'receive', @host, msg
+          # console.log 'receive', @host, JSON.stringify msg
           ping_received++
           switch
             when Array.isArray msg
@@ -138,13 +139,13 @@ Avoid processing messages we sent, or messages we forwarded (loop avoidance).
 Note: the length of `msg.R` (the path the message already followed) is a good indication of the radius of the network.
 
               return if msg.s is @host
-              return if @host in msg.R
 
 Avoid processing expired messages
 
               return if msg.e < Date.now()
 
-              changes = msg.c.map @deserialize
+              msg.c.forEach @deserialize
+              changes = msg.c
 
               # console.log 'received', @host, name, msg.e, changes, msg.R
 
@@ -153,8 +154,12 @@ The original code called for only forwarding the original message, updated with 
 However this is not very reliable because things are lossy. It's better to send the entire set every time we get an update, which gives a chance to server which are behind to catch up.
 
               process.nextTick =>
-                res = @store.on_send name, msg.e, changes, sub
-                @queue.set name, @packet res, msg.R
+                res = @store.merge name, msg.e, changes, sub
+                if res.changed
+                  @queue.set name, @packet res
+                else
+                  return if @host in msg.R
+                  @queue.set name, @packet res, msg.R
 
               return
 
@@ -231,7 +236,7 @@ Avoid an infinite loop when we don't have any data yet.
         return
 
       send: (msg,socket=null) ->
-        # console.log 'send',msg
+        # console.log 'send',@host,JSON.stringify msg
         @pub.send msg
 
       send_data: (msg) ->
@@ -240,9 +245,11 @@ Avoid an infinite loop when we don't have any data yet.
         return
 
       packet: ({name,expire,changes,source},route = []) ->
+        # console.log 'packet', @host, JSON.stringify {name,expire,changes,source,route}
+        changes.forEach @serialize
         n: name
         e: expire
-        c: changes.map @serialize
+        c: changes
         s: source
         R: [@host,route...]
 

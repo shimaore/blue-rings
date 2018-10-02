@@ -20,7 +20,9 @@
         if @t < t
           @v = v
           @t = t
-        return
+          true
+        else
+          false
 
       value: ->
         @v
@@ -28,7 +30,8 @@
       all: ->
         [[@v,@t]]
 
-      @deserialize: ([v,t]) -> [v,BigInt(t)] # BigInt.fromString t, 36
-      @serialize:   ([v,t]) -> [v,t.toString()] # t.toString 36
+      # [v,t]
+      @deserialize: (a) -> a[1] = BigInt a[1]     # BigInt.fromString t, 36
+      @serialize:   (a) -> a[1] = a[1].toString() # t.toString 36
 
     module.exports = {LWWRegister}

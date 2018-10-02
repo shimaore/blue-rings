@@ -23,7 +23,6 @@
               Value: Value
 
             before -> m.bound
-            after -> m.end()
 
             NAME = 'bear'
             m.setup_counter NAME, Date.now()+4000
@@ -48,6 +47,8 @@
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept -5
 
+            m.end()
+
           it 'should accumulate values across two servers', ->
             port1 = port++
             port2 = port++
@@ -58,7 +59,6 @@
                 tcp port2
               ]
               Value: Value
-            after -> m1.end()
 
             m2 = M
               host: 'β'
@@ -67,7 +67,6 @@
                 tcp port1
               ]
               Value: Value
-            after -> m2.end()
 
             await Promise.all [m1.bound,m2.bound,m1.connected,m2.connected]
 
@@ -110,6 +109,9 @@
             v = m2.get_counter(NAME)
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 22
+
+            m1.end()
+            m2.end()
 
           it 'should share values across two servers (with setup in the middle)', ->
             port1 = port++
@@ -121,7 +123,6 @@
                 tcp port2
               ]
               Value: Value
-            after -> m1.end()
 
             m2 = M
               host: 'β'
@@ -130,7 +131,6 @@
                 tcp port1
               ]
               Value: Value
-            after -> m2.end()
 
             await Promise.all [m1.bound,m2.bound,m1.connected,m2.connected]
 
@@ -175,6 +175,9 @@
             v = m2.get_counter(NAME)
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 22
+
+            m1.end()
+            m2.end()
 
           it 'should share values across two disconnected servers', ->
             port1 = port++
@@ -187,7 +190,6 @@
                 tcp port2
               ]
               Value: Value
-            after -> m1.end()
 
             NAME = 'dog'
 
@@ -209,7 +211,6 @@
                 tcp port1
               ]
               Value: Value
-            after -> m2.end()
 
             m2.setup_counter NAME, Date.now()+8000
             v = m2.update_counter NAME, Value.accept 42
@@ -239,6 +240,9 @@
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 94
 
+            m1.end()
+            m2.end()
+
           it 'should share values across three servers (ring)', ->
             @timeout 3000
 
@@ -253,7 +257,6 @@
               ]
               Value: Value
               ping_interval: 20
-            after -> m1.end()
 
             m2 = M
               host: 'β'
@@ -263,7 +266,6 @@
               ]
               Value: Value
               ping_interval: 20
-            after -> m2.end()
 
             m3 = M
               host: 'γ'
@@ -273,7 +275,6 @@
               ]
               Value: Value
               ping_interval: 20
-            after -> m3.end()
 
             NAME = 'ant'
 
@@ -327,6 +328,9 @@
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 53
 
+            m1.end()
+            m2.end()
+            m3.end()
 
           it 'should share values across three disconnected servers (full-mesh)', ->
             @timeout 3000
@@ -342,7 +346,6 @@
                 tcp port3
               ]
               Value: Value
-            after -> m1.end()
 
             NAME = 'dog'
 
@@ -366,7 +369,6 @@
                 tcp port3
               ]
               Value: Value
-            after -> m2.end()
 
             m2.setup_counter NAME, Date.now()+8000
             v = m2.update_counter NAME, Value.accept 42
@@ -416,7 +418,6 @@
                 tcp port2
               ]
               Value: Value
-            after -> m3.end()
 
             m3.setup_counter NAME, Date.now()+8000
             v = m3.update_counter NAME, Value.accept 1
@@ -435,6 +436,10 @@
             v = m3.get_counter(NAME)
             v.should.have.property 0, true
             v.should.have.property 1, Value.accept 96
+
+            m1.end()
+            m2.end()
+            m3.end()
 
           HOSTS = 'αβγδεζηθικλμνξοπρςστυφχψω'
           load = (timeout,filter,options={},runs=1000,hosts=HOSTS) ->
@@ -463,9 +468,6 @@
             before ->
               await Promise.all ms.map (x) -> x.bound
               await Promise.all ms.map (x) -> x.connected
-
-            after ->
-              ms.forEach (m) -> m.end()
 
             console.timeEnd 'establish connections'
 
@@ -519,6 +521,8 @@
               success = Value.equals x[1], Value.accept sum
               outcome++ if success
               console.log "Server #{i[j]}", x, sum, m.statistics(), unless success then '←' else ''
+
+            ms.forEach (m) -> m.end()
 
             return Promise.reject new Error "Only synchronized #{outcome} servers out of #{ms.length}" unless outcome is ms.length
             return

@@ -7,13 +7,13 @@
     nanosecond = `1000000000n`
 
     describe 'The package', ->
-        blue_rings = require '..'
-        M = blue_rings.run
+      blue_rings = require '..'
+      M = blue_rings.run
 
-        port = Math.ceil 22000+10000*Math.random()
-        tcp = (p) -> "tcp://127.0.0.1:#{p}"
+      port = Math.ceil 22000+10000*Math.random()
+      tcp = (p) -> "tcp://127.0.0.1:#{p}"
 
-        describe "when using sets", ->
+      describe "when using sets", ->
           it 'should accept values', ->
 
             m = M
@@ -63,7 +63,6 @@
               subscribe_to: [
                 tcp port2
               ]
-            after -> m1.end()
 
             m2 = M
               host: 'β'
@@ -71,7 +70,6 @@
               subscribe_to: [
                 tcp port1
               ]
-            after -> m2.end()
 
             await Promise.all [m1.bound,m2.bound,m1.connected,m2.connected]
 
@@ -146,6 +144,9 @@
             v.should.have.property 1
             v[1].should.have.length 1
             v[1].should.have.property 0, 'a'
+
+            m1.end()
+            m2.end()
 
           it 'should share values across two disconnected servers', ->
             port1 = port++
@@ -438,12 +439,11 @@
               await Promise.all ms.map (x) -> x.bound
               await Promise.all ms.map (x) -> x.connected
 
-            after ->
-              ms.forEach (m) -> m.end()
-
             console.timeEnd 'establish connections'
 
             await sleep (options.ping_interval ? 137)*2
+
+            console.time 'update'
 
             NAME = 'lion'
             for m in ms
@@ -463,25 +463,28 @@
               else
                 ms[x].remove NAME, v, Date.now()+80000
                 await nextTick()
+            console.timeEnd 'update'
 
+            console.time 'analyze'
             zero = BigInt 0
             prev = [zero,zero]
             t = 500
             last = process.hrtime.bigint()
             for j in [0...timeout/t]
               await sleep t
+              now = process.hrtime.bigint()
+              delta = now-last
               msgs = ms.reduce (a,n) ->
                 {recv,sent} = n.statistics()
                 [a[0]+recv,a[1]+sent]
               , [zero,zero]
-              now = process.hrtime.bigint()
-              delta = now-last
               console.log "recv #{(msgs[0]-prev[0])*nanosecond/delta} msg/s, ",
                           "sent #{(msgs[1]-prev[1])*nanosecond/delta} msg/s, ",
                           "using #{(delta/BigInt t)/`10000n`-`100n`}% overtime."
               last = now
               prev = msgs
 
+            console.timeEnd 'analyze'
             end = Date.now()
             console.log (Math.ceil (end-start)/ms.length), "ms per process", (Math.ceil timeout/ms.length), "ms wait per process"
             console.log options
@@ -501,6 +504,8 @@ Therefor we merely make sure that all servers have the same data.
               success = expected_string is xb
               outcome++ if success
               # console.log "Server #{i[j]}", x[1].length, m.statistics(), unless success then '←' else ''
+
+            ms.forEach (m) -> m.end()
 
             return Promise.reject new Error "Only synchronized #{outcome} servers out of #{ms.length}" unless outcome is ms.length
             return

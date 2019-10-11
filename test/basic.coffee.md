@@ -11,7 +11,11 @@
       M = blue_rings.run
 
       port = Math.ceil 2000+10000*Math.random()
-      tcp = (p) -> "tcp://127.0.0.1:#{p}"
+      tcp = (p) ->
+        if p % 2
+          "tcp://127.0.0.1:#{p}"
+        else
+          "tcp6://[::1]:#{p}"
 
       run_with = (type,Value) ->
         describe "when using #{type}", ->
